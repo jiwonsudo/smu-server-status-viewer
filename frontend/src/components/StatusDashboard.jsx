@@ -1,11 +1,17 @@
+'use client';
+
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { MainBg, Navbar, StatusBar, Footer } from './components';
 import axios from 'axios';
+import MainBg from './main_background';
+import Navbar from './navbar';
+import StatusBar from './statusbar';
+import Footer from './footer';
 
 const REFRESH_INTERVAL_MS = 60 * 1000;
 const DELAY_NOTICE_MS = 8 * 1000; // Render 콜드스타트 대응: 이 시간 이상 응답이 없으면 지연 문구 표시
+const URL_ROOT = 'https://smu-server-status-viewer-be.onrender.com';
 
-function App() {
+function StatusDashboard() {
   const [statusData, setStatusData] = useState([
     { statusMsg: null, statusColor: '#f0ad4e', responseTime: null },
     { statusMsg: null, statusColor: '#f0ad4e', responseTime: null },
@@ -13,13 +19,11 @@ function App() {
   ]);
   const [isDelayed, setIsDelayed] = useState(false);
 
-  const URL_ROOT = 'https://smu-server-status-viewer-be.onrender.com';
-
-  const siteInfos = useMemo (() => {
+  const siteInfos = useMemo(() => {
     return [
-    { title: '상명대학교 홈페이지', url: 'https://www.smu.ac.kr/kor/index.do', endpoint: '/status/home'},
-    { title: '상명대학교 이캠퍼스', url: 'https://ecampus.smu.ac.kr/', endpoint: '/status/ecampus'},
-    { title: '상명대학교 샘물', url: 'https://smul.smu.ac.kr/', endpoint: '/status/sammul'},
+      { title: '상명대학교 홈페이지', url: 'https://www.smu.ac.kr/kor/index.do', endpoint: '/status/home' },
+      { title: '상명대학교 이캠퍼스', url: 'https://ecampus.smu.ac.kr/', endpoint: '/status/ecampus' },
+      { title: '상명대학교 샘물', url: 'https://smul.smu.ac.kr/', endpoint: '/status/sammul' },
     ];
   }, []);
 
@@ -82,7 +86,7 @@ function App() {
 
   return (
     <>
-      <Navbar/>
+      <Navbar />
       <MainBg>
         {siteInfos.map((siteInfo, index) => (
           <StatusBar
@@ -96,9 +100,9 @@ function App() {
           />
         ))}
       </MainBg>
-      <Footer/>
+      <Footer />
     </>
   );
 }
 
-export default App;
+export default StatusDashboard;
