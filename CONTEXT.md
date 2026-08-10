@@ -21,7 +21,7 @@
 
 검색 노출 목표 키워드(`상명대 서버상태`, `상명대 서버`, `이캠 서버`, `이캠 안됨`, `상명대 이캠 안됨`)가 생겨서 순수 CSR인 CRA를 버리고 Next.js로 옮김. CRA는 크롤러가 받는 최초 HTML이 빈 껍데기라 색인에 불리함.
 
-- `src/app/layout.js`: `metadata` export로 title/description/OG 태그를 서버에서 렌더 — 크롤러가 JS 실행 없이도 바로 읽음. GA는 `next/script`로 이전. styled-components SSR 레지스트리(`src/lib/registry.jsx`)로 감싸서 스타일 깜빡임 없이 SSR.
+- `src/app/layout.js`: `metadata` export로 title/description/OG 태그를 서버에서 렌더 — 크롤러가 JS 실행 없이도 바로 읽음. GA는 `next/script`로 이전.
 - `src/app/page.js`: 서버 컴포넌트. `<StatusDashboard/>`(클라이언트) 위/아래로 목표 키워드가 실제로 들어간 소개 문단(`<h1>`, `<p>`)을 서버 렌더 — `npm run build` 후 프로덕션 서버로 확인, 최초 HTML에 모든 키워드 문구가 존재함을 검증함.
 - `src/components/StatusDashboard.jsx`: 예전 `App.js`의 폴링 로직 그대로, `'use client'`로 표시. Navbar/MainBg/StatusBar/Footer는 변경 없음.
 - `src/app/robots.js`, `src/app/sitemap.js`: Next 파일 컨벤션으로 자동 생성.
@@ -31,6 +31,15 @@
 ### 로컬 개발 명령어 변경
 
 예전 `npm start`(CRA) → 이제 `npm run dev`(Next dev 서버, 기본 포트 3000). 프로덕션 미리보기는 `npm run build && npm start`.
+
+## 스타일링: styled-components → Tailwind CSS
+
+App Router에서 styled-components는 SSR용 배선(`lib/registry.jsx` + `next.config.js`의 `compiler.styledComponents`)이 따로 필요해서, Next.js가 기본으로 미는 Tailwind로 교체함.
+
+- Tailwind v4 (`npm install tailwindcss @tailwindcss/postcss postcss`) — v4는 `tailwind.config.js` 없이 zero-config, `postcss.config.mjs`에 플러그인 등록 + `globals.css` 맨 위에 `@import "tailwindcss";`만 있으면 됨.
+- `Navbar`/`MainBg`/`StatusBar`/`Footer`를 `styled.div` → 일반 엘리먼트 + Tailwind 유틸리티 클래스로 전환. `StatusBar`의 상태등 색상(`statusColor`)은 런타임에 결정되는 값이라 Tailwind 클래스로 못 박아둘 수 없어서 `style={{ backgroundColor: ... }}` 인라인 스타일 그대로 유지.
+- `lib/registry.jsx`, `next.config.js`의 styled-components 컴파일러 옵션, `styled-components` 의존성 전부 제거.
+- IDE의 Tailwind lint가 임의값 클래스(`h-[50px]`, `max-w-[720px]`)에 표준 스케일 클래스(`h-12.5`, `max-w-180`)를 쓰라고 제안해서 그대로 반영함.
 
 ## 배포 관련 — 아직 안 한 것
 
