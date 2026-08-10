@@ -1,17 +1,17 @@
 {
   "ECAMPUS": {
     "status": "timeout",
-    "lastCheckedAt": "2026-08-10T19:50:45Z",
+    "lastCheckedAt": "2026-08-10T20:26:47Z",
     "lastChangedAt": "2026-08-10T08:25:04Z"
   },
   "HOME": {
     "status": "ok",
-    "lastCheckedAt": "2026-08-10T19:50:39Z",
+    "lastCheckedAt": "2026-08-10T20:26:41Z",
     "lastChangedAt": "2026-08-10T08:24:58Z"
   },
   "SAMMUL": {
     "status": "ok",
-    "lastCheckedAt": "2026-08-10T19:50:40Z",
+    "lastCheckedAt": "2026-08-10T20:26:42Z",
     "lastChangedAt": "2026-08-10T08:24:59Z"
   }
 }
