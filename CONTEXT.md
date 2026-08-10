@@ -17,11 +17,27 @@
 - `.github/workflows/monitor.yml`: `*/5 * * * *` 크론으로 `check-status.js` 실행. `backend/data/status.json`이 실제로 바뀐 경우에만 봇 커밋으로 리포에 다시 push(상태 전환 이력이 git log에 남음). GitHub Actions 러너는 매번 새로 체크아웃되는 휘발성 환경이라, 상태 지속을 위해 `data/status.json`을 이제 git 추적 대상으로 바꿈(예전엔 Render 로컬 디스크 전용이라 gitignore였음).
 - `backend/server.js`: `startMonitor`/`node-cron` 제거. 이제 순수하게 요청 기반 API 서버.
 
+## 프론트엔드: CRA → Next.js (App Router) 전환 (핵심)
+
+검색 노출 목표 키워드(`상명대 서버상태`, `상명대 서버`, `이캠 서버`, `이캠 안됨`, `상명대 이캠 안됨`)가 생겨서 순수 CSR인 CRA를 버리고 Next.js로 옮김. CRA는 크롤러가 받는 최초 HTML이 빈 껍데기라 색인에 불리함.
+
+- `src/app/layout.js`: `metadata` export로 title/description/OG 태그를 서버에서 렌더 — 크롤러가 JS 실행 없이도 바로 읽음. GA는 `next/script`로 이전. styled-components SSR 레지스트리(`src/lib/registry.jsx`)로 감싸서 스타일 깜빡임 없이 SSR.
+- `src/app/page.js`: 서버 컴포넌트. `<StatusDashboard/>`(클라이언트) 위/아래로 목표 키워드가 실제로 들어간 소개 문단(`<h1>`, `<p>`)을 서버 렌더 — `npm run build` 후 프로덕션 서버로 확인, 최초 HTML에 모든 키워드 문구가 존재함을 검증함.
+- `src/components/StatusDashboard.jsx`: 예전 `App.js`의 폴링 로직 그대로, `'use client'`로 표시. Navbar/MainBg/StatusBar/Footer는 변경 없음.
+- `src/app/robots.js`, `src/app/sitemap.js`: Next 파일 컨벤션으로 자동 생성.
+- CRA 잔재 제거: `src/index.js`, `reportWebVitals`, `react-scripts`/`web-vitals`/`testing-library` 의존성, 그리고 **git에 커밋되던 `build/` 폴더**(Next의 `.next/`는 gitignore 대상이라 이제 커밋 안 함 — 예전 CRA 특이 구조는 더 이상 해당 없음).
+- Next 16.3.0 사용(`npm install next@latest`로 postcss/sharp 취약점 있던 15.x 회피, `npm audit` 0건 확인).
+
+### 로컬 개발 명령어 변경
+
+예전 `npm start`(CRA) → 이제 `npm run dev`(Next dev 서버, 기본 포트 3000). 프로덕션 미리보기는 `npm run build && npm start`.
+
 ## 배포 관련 — 아직 안 한 것
 
 - **Render/Vercel 대시보드 재연결 안 함.** 지금은 로컬 레포만 새 GitHub 주소(`jiwonsudo/smu-uptime`)로 push된 상태. 실제 자동배포가 되려면:
   - Render: 기존 백엔드 서비스의 연결된 GitHub 레포를 `smu-uptime`으로 바꾸고 Root Directory를 `backend`로 설정. `.env`(SMTP_*, ALERT_EMAIL_TO)도 그대로 다시 넣어야 함(레포 바뀌어도 환경변수는 안 넘어옴).
-  - Vercel: 마찬가지로 프로젝트의 연결 레포를 `smu-uptime`으로 바꾸고 Root Directory `frontend`로 설정.
+  - Vercel: 프로젝트의 연결 레포를 `smu-uptime`으로 바꾸고 Root Directory `frontend`로 설정. **Framework Preset이 Next.js로 잡히는지 확인**(CRA 프리셋으로 남아있으면 빌드 깨짐).
   - GitHub Actions 워크플로우가 이메일/카카오 알림을 보내려면 **Settings → Secrets and variables → Actions**에 `SMTP_HOST/PORT/SECURE/USER/PASS/FROM`, `ALERT_EMAIL_TO`, (나중에) `KAKAO_ADMIN_KEY` 등록 필요.
 - FE의 `URL_ROOT`가 여전히 `https://smu-server-status-viewer-be.onrender.com`로 하드코딩됨 — Render 서비스 자체 URL은 레포만 바꾸면 유지되니 재배포 후에도 그대로 쓸 수 있음. 다만 서비스를 완전히 새로 만드는 경우엔 URL이 바뀌므로 확인 필요.
+- `layout.js`의 `metadataBase`/OG `url`/`sitemap.js`/`robots.js`가 전부 `https://smu-server-status-viewer.vercel.app`로 하드코딩됨 — Vercel 도메인이 바뀌면 같이 고쳐야 함.
 - BE `/status/notice` 엔드포인트는 그대로 남아있음(FE에서 안 씀).
