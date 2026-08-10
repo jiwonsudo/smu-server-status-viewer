@@ -1,1 +1,17 @@
-{}
+{
+  "HOME": {
+    "status": "ok",
+    "lastCheckedAt": "2026-08-10T06:56:48.899Z",
+    "lastChangedAt": "2026-08-10T06:56:48.899Z"
+  },
+  "SAMMUL": {
+    "status": "ok",
+    "lastCheckedAt": "2026-08-10T06:56:50.288Z",
+    "lastChangedAt": "2026-08-10T06:56:50.288Z"
+  },
+  "ECAMPUS": {
+    "status": "timeout",
+    "lastCheckedAt": "2026-08-10T06:56:55.295Z",
+    "lastChangedAt": "2026-08-10T06:56:55.295Z"
+  }
+}
