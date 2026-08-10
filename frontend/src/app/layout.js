@@ -1,5 +1,4 @@
 import Script from 'next/script';
-import StyledComponentsRegistry from '../lib/registry';
 import './globals.css';
 
 export const metadata = {
@@ -25,7 +24,7 @@ export default function RootLayout({ children }) {
   return (
     <html lang="ko">
       <body>
-        <StyledComponentsRegistry>{children}</StyledComponentsRegistry>
+        {children}
         <Script
           src="https://www.googletagmanager.com/gtag/js?id=G-SCW0YE7V1B"
           strategy="afterInteractive"

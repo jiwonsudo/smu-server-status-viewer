@@ -3,11 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
     "axios": "^1.9.0",
     "next": "^16.3.0",
+    "postcss": "^8.5.26",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "styled-components": "^6.1.17"
+    "tailwindcss": "^4.3.3"
   },
   "scripts": {
     "dev": "next dev",

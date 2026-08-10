@@ -1,36 +1,12 @@
-import styled from 'styled-components';
 import SUMUNG_CUT from '../../assets/sumung_cut.png';
-
-const NavbarBG = styled.div`
-  width: 100%;
-  height: 50px;
-  background-color: #0E207F;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-`;
-
-const MascotImg = styled.img.attrs({
-  src: SUMUNG_CUT
-})`
-  height: 100%;
-  aspect-ratio: 1;
-  object-fit: contain;
-`;
-
-const Title = styled.div`
-  margin-left: 0.5em;
-  color: white;
-  font-weight: 600;
-  font-size: 1.2em;
-`;
 
 const Navbar = () => {
   return (
-    <NavbarBG>
-      <MascotImg/>
-      <Title>상명대학교 서버상태</Title>
-    </NavbarBG>
+    <div className="flex h-12.5 w-full items-center justify-center bg-[#0E207F]">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={SUMUNG_CUT.src} alt="상명대학교 마스코트" className="aspect-square h-full object-contain" />
+      <div className="ml-2 text-[1.2em] font-semibold text-white">상명대학교 서버상태</div>
+    </div>
   );
 }
 

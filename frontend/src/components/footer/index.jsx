@@ -1,27 +1,8 @@
-import styled from "styled-components";
-
-const FooterBg = styled.div`
-  width: 100vw;
-  height: 50px;
-  background-color: #333B3D;
-  position: absolute;
-  bottom: 0;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-`;
-
-const FooterText = styled.div`
-  color: #D9D9D9;
-  font-size: 0.8em;
-`;
-
 const Footer = () => {
   return (
-    <FooterBg>
-      <FooterText>&#169; 2025. Jiwon Jeong All rights reserved.</FooterText>
-    </FooterBg>
-
+    <div className="absolute bottom-0 flex h-12.5 w-screen items-center justify-center bg-[#333B3D]">
+      <div className="text-[0.8em] text-[#D9D9D9]">&#169; 2025. Jiwon Jeong All rights reserved.</div>
+    </div>
   );
 }
 

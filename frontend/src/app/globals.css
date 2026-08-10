@@ -1,3 +1,4 @@
+@import "tailwindcss";
 
 @font-face {
 	font-family: 'Pretendard Variable';
@@ -7,39 +8,11 @@
 	src: url('../styles/fonts/PretendardVariable.woff2'), url('../styles/fonts/PretendardVariable.ttf') format('woff2-variations');
 }
 
-html, body {
-  margin: 0;
-  padding: 0;
-  font-family:  'Pretendard Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+body {
+  font-family: 'Pretendard Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   word-break: keep-all;
-}
-
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
-}
-
-.dashboard-viewport {
-  position: relative;
-  min-height: 100vh;
-}
-
-.intro {
-  max-width: 720px;
-  margin: 40px auto;
-  padding: 0 20px;
-  color: #555;
-}
-
-.intro h1 {
-  font-size: 1.3em;
-  color: #333;
-}
-
-.intro p {
-  line-height: 1.6;
 }
