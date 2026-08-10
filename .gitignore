@@ -1,0 +1,3 @@
+# local-only backups of the old standalone repos, not part of the monorepo
+frontend.old-standalone-repo/
+backend.old-standalone-repo/
