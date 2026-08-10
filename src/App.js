@@ -1,6 +1,9 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { MainBg, Navbar, StatusBar, Footer } from './components';
 import axios from 'axios';
+
+const REFRESH_INTERVAL_MS = 60 * 1000;
+const DELAY_NOTICE_MS = 8 * 1000; // Render 콜드스타트 대응: 이 시간 이상 응답이 없으면 지연 문구 표시
 
 function App() {
   const [statusData, setStatusData] = useState([
@@ -8,6 +11,7 @@ function App() {
     { statusMsg: null, statusColor: '#f0ad4e', responseTime: null },
     { statusMsg: null, statusColor: '#f0ad4e', responseTime: null }
   ]);
+  const [isDelayed, setIsDelayed] = useState(false);
 
   const URL_ROOT = 'https://smu-server-status-viewer-be.onrender.com';
 
@@ -15,12 +19,17 @@ function App() {
     return [
     { title: '상명대학교 홈페이지', url: 'https://www.smu.ac.kr/kor/index.do', endpoint: '/status/home'},
     { title: '상명대학교 이캠퍼스', url: 'https://ecampus.smu.ac.kr/', endpoint: '/status/ecampus'},
-    { title: '상명대학교 통합공지', url: 'https://www.smu.ac.kr/kor/life/notice.do', endpoint: '/status/notice'},
+    { title: '상명대학교 샘물', url: 'https://smul.smu.ac.kr/', endpoint: '/status/sammul'},
     ];
   }, []);
 
+  const delayTimerRef = useRef(null);
+
   useEffect(() => {
     const fetchData = async () => {
+      setIsDelayed(false);
+      delayTimerRef.current = setTimeout(() => setIsDelayed(true), DELAY_NOTICE_MS);
+
       const promises = siteInfos.map((siteInfo, index) => {
         return axios
           .get(`${URL_ROOT}${siteInfo.endpoint}`)
@@ -58,9 +67,17 @@ function App() {
       });
 
       await Promise.all(promises);
+      clearTimeout(delayTimerRef.current);
+      setIsDelayed(false);
     };
 
     fetchData();
+    const intervalId = setInterval(fetchData, REFRESH_INTERVAL_MS);
+
+    return () => {
+      clearInterval(intervalId);
+      clearTimeout(delayTimerRef.current);
+    };
   }, [siteInfos]);
 
   return (
@@ -73,9 +90,9 @@ function App() {
             title={siteInfo.title}
             url={siteInfo.url}
             href={siteInfo.url}
-            statusMsg={statusData[index]?.statusMsg || '서버 확인 중...'}
+            statusMsg={statusData[index]?.statusMsg || (isDelayed ? '확인 지연(서버 기동 중...)' : '서버 확인 중...')}
             statusColor={statusData[index]?.statusColor || '#f0ad4e'}
-            responseTime={statusData[index]?.responseTime || '응답 확인 중...'}
+            responseTime={statusData[index]?.responseTime || (isDelayed ? '잠시만 기다려주세요' : '응답 확인 중...')}
           />
         ))}
       </MainBg>
