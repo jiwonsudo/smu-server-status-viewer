@@ -1,7 +1,7 @@
 export default function sitemap() {
   return [
     {
-      url: 'https://smu-server-status-viewer.vercel.app',
+      url: 'https://issmuok.site',
       lastModified: new Date(),
       changeFrequency: 'always',
       priority: 1,

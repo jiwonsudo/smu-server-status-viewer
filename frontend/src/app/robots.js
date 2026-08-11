@@ -4,6 +4,6 @@ export default function robots() {
       userAgent: '*',
       allow: '/',
     },
-    sitemap: 'https://smu-server-status-viewer.vercel.app/sitemap.xml',
+    sitemap: 'https://issmuok.site/sitemap.xml',
   };
 }
