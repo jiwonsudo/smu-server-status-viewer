@@ -11,6 +11,7 @@ import { SITE_INFOS } from '../lib/siteInfos';
 
 const REFRESH_INTERVAL_MS = 60 * 1000;
 const DELAY_NOTICE_MS = 8 * 1000; // Render 콜드스타트 대응: 이 시간 이상 응답이 없으면 지연 문구 표시
+const REQUEST_TIMEOUT_MS = 15 * 1000; // 이거 없으면 백엔드가 느릴 때 요청이 끝없이 매달림
 
 const PIN_STORAGE_KEY = 'smu-status-pins';
 
@@ -79,7 +80,7 @@ function StatusDashboard({ initialStatusData = {} }) {
 
       const promises = siteInfos.map((siteInfo) => {
         return axios
-          .get(`${URL_ROOT}${siteInfo.endpoint}`)
+          .get(`${URL_ROOT}${siteInfo.endpoint}`, { timeout: REQUEST_TIMEOUT_MS })
           .then((response) => {
             const { status, message, responseTime, error: backendError } = response.data;
             const entry = computeDisplayStatus(siteInfo.title, { status, message, responseTime, backendError });
