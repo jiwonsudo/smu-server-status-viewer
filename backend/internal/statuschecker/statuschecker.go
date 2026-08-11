@@ -23,11 +23,16 @@ type Result struct {
 	Error        string `json:"error,omitempty"`
 }
 
+// 상명대 서울캠퍼스 대상 서비스만 관리한다 (천안캠퍼스 전용 사이트 제외).
 var ServiceURL = map[string]string{
-	"HOME":    "https://www.smu.ac.kr/kor/index.do",
-	"NOTICE":  "https://www.smu.ac.kr/kor/life/notice.do",
-	"SAMMUL":  "https://smul.smu.ac.kr/",
-	"ECAMPUS": "https://ecampus.smu.ac.kr/",
+	"HOME":       "https://www.smu.ac.kr/kor/index.do",
+	"NOTICE":     "https://www.smu.ac.kr/kor/life/notice.do",
+	"SAMMUL":     "https://smul.smu.ac.kr/",
+	"ECAMPUS":    "https://ecampus.smu.ac.kr/",
+	"CAREER":     "https://smcareer.smu.ac.kr/",
+	"CLOUD":      "https://cloud.smu.ac.kr/",
+	"DORM_SEOUL": "https://dormitory.smu.ac.kr/dormi/index.do",
+	"LIB_SEOUL":  "https://lib.smu.ac.kr/",
 }
 
 const browserUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
@@ -64,7 +69,7 @@ func CheckServiceStatus(ctx context.Context, url string) Result {
 
 	if err != nil {
 		if isTimeout(err) {
-			return Result{Status: "timeout", ResponseTime: "N/A", Message: "매우 느림(비정상)"}
+			return Result{Status: "timeout", ResponseTime: "N/A", Message: "매우 느림(비정상)", Error: err.Error()}
 		}
 		return Result{
 			Status:       "error",
