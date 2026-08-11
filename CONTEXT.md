@@ -1,6 +1,6 @@
 # SMU Server Status Viewer — 작업 컨텍스트 (2026-08-10)
 
-이 워크스페이스는 이제 단일 모노레포. `https://github.com/jiwonsudo/smu-uptime` 로 push 완료됨.
+이 워크스페이스는 이제 단일 모노레포. `https://github.com/jiwonsudo/smu-server-status-viewer` 로 push 완료됨.
 - `frontend/`, `backend/` 둘 다 이 워크스페이스 루트의 git 저장소(하나의 `.git`)에 포함됨.
 - 기존 두 레포(`SMU-Server-Status-Viewer`, `SMU-Server-Status-Viewer-BE`)의 커밋 히스토리는 `git subtree add`로 각각 `frontend/`, `backend/` 프리픽스 아래 보존해서 가져옴 — `git log`에서 예전 커밋도 그대로 조회 가능.
 - 예전 두 레포의 로컬 작업 사본은 `frontend.old-standalone-repo/`, `backend.old-standalone-repo/`로 이름만 바꿔서 백업 보존 중(`.gitignore`에 추가해서 새 모노레포엔 안 들어감). 배포 전환 확인되면 삭제해도 됨.
@@ -44,7 +44,7 @@ App Router에서 styled-components는 SSR용 배선(`lib/registry.jsx` + `next.c
 
 원래 군대에서 빠르게 만든다고 Express로 시작한 건데, 이번엔 실서비스로 쓸 리포를 그대로 Go 연습 겸 재작성함(별도 연습 프로젝트가 아니라 이 리포 `backend/`를 통째로 교체 — 사용자가 직접 선택함). API 계약(엔드포인트 경로, JSON 응답 모양)은 그대로 유지해서 프론트엔드는 손 안 댐.
 
-- `backend/go.mod`: 모듈명 `smu-uptime/backend`, Go 1.26.
+- `backend/go.mod`: 모듈명 `smu-server-status-viewer/backend`, Go 1.26.
 - `backend/cmd/server/main.go`: HTTP API 서버 (`net/http` 표준 라이브러리). 엔드포인트 4개(`/status/home`, `/status/notice`, `/status/sammul`, `/status/ecampus`) 동일. CORS는 직접 미들웨어로 구현(허용 origin 1개만), rate limit도 `internal/ratelimit`으로 직접 구현한 고정 윈도우 리미터(분당 20회, express-rate-limit과 동일 스펙) — 여러 인스턴스로 스케일하면 메모리 기반이라 안 맞지만 지금 단일 인스턴스 구조엔 문제없음. 클라이언트 IP는 `X-Forwarded-For`에서 읽음(Render 리버스 프록시 뒤라 예전 `trust proxy` 설정과 동일한 이유).
 - `backend/cmd/checkstatus/main.go`: GitHub Actions가 실행하는 1회성 점검 스크립트 (`go run ./cmd/checkstatus`). 예전 `check-status.js`와 동일한 흐름.
 - `backend/internal/statuschecker`: 상태 체크 로직 — GET + 브라우저 User-Agent + 5초 타임아웃 + 리다이렉트 5회 제한, 예전 로직과 동일. `Result.ResponseTime`은 Go에서 `any` 타입으로 선언해서, JS 때처럼 보통은 숫자(ms)로, timeout일 땐 문자열 `"N/A"`로 직렬화됨 — **프론트엔드가 기대하는 응답 모양이 그대로 유지되도록 의도적으로 이렇게 함.**
@@ -56,9 +56,9 @@ App Router에서 styled-components는 SSR용 배선(`lib/registry.jsx` + `next.c
 
 ## 배포 관련 — 아직 안 한 것
 
-- **Render/Vercel 대시보드 재연결 안 함.** 지금은 로컬 레포만 새 GitHub 주소(`jiwonsudo/smu-uptime`)로 push된 상태. 실제 자동배포가 되려면:
-  - Render: 기존 백엔드 서비스의 연결된 GitHub 레포를 `smu-uptime`으로 바꾸고 Root Directory를 `backend`로 설정. **런타임이 Node → Go로 바뀌었으니 Render의 Environment를 "Go"로, Build Command를 `go build -o smu-server ./cmd/server`, Start Command를 `./smu-server`로 설정해야 함.** `.env`(SMTP_*, ALERT_EMAIL_TO)도 그대로 다시 넣어야 함(레포 바뀌어도 환경변수는 안 넘어옴).
-  - Vercel: 프로젝트의 연결 레포를 `smu-uptime`으로 바꾸고 Root Directory `frontend`로 설정. **Framework Preset이 Next.js로 잡히는지 확인**(CRA 프리셋으로 남아있으면 빌드 깨짐).
+- **Render/Vercel 대시보드 재연결 안 함.** 지금은 로컬 레포만 새 GitHub 주소(`jiwonsudo/smu-server-status-viewer`)로 push된 상태. 실제 자동배포가 되려면:
+  - Render: 기존 백엔드 서비스의 연결된 GitHub 레포를 `smu-server-status-viewer`으로 바꾸고 Root Directory를 `backend`로 설정. **런타임이 Node → Go로 바뀌었으니 Render의 Environment를 "Go"로, Build Command를 `go build -o smu-server ./cmd/server`, Start Command를 `./smu-server`로 설정해야 함.** `.env`(SMTP_*, ALERT_EMAIL_TO)도 그대로 다시 넣어야 함(레포 바뀌어도 환경변수는 안 넘어옴).
+  - Vercel: 프로젝트의 연결 레포를 `smu-server-status-viewer`으로 바꾸고 Root Directory `frontend`로 설정. **Framework Preset이 Next.js로 잡히는지 확인**(CRA 프리셋으로 남아있으면 빌드 깨짐).
   - GitHub Actions 워크플로우가 이메일/카카오 알림을 보내려면 **Settings → Secrets and variables → Actions**에 `SMTP_HOST/PORT/USER/PASS/FROM`, `ALERT_EMAIL_TO`, (나중에) `KAKAO_ADMIN_KEY` 등록 필요.
 - FE의 `URL_ROOT`가 여전히 `https://smu-server-status-viewer-be.onrender.com`로 하드코딩됨 — Render 서비스 자체 URL은 레포만 바꾸면 유지되니 재배포 후에도 그대로 쓸 수 있음. 다만 서비스를 완전히 새로 만드는 경우엔 URL이 바뀌므로 확인 필요.
 - `layout.js`의 `metadataBase`/OG `url`/`sitemap.js`/`robots.js`가 전부 `https://smu-server-status-viewer.vercel.app`로 하드코딩됨 — Vercel 도메인이 바뀌면 같이 고쳐야 함.

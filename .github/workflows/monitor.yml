@@ -32,7 +32,9 @@ jobs:
           SMTP_PASS: ${{ secrets.SMTP_PASS }}
           SMTP_FROM: ${{ secrets.SMTP_FROM }}
           ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
-          KAKAO_ADMIN_KEY: ${{ secrets.KAKAO_ADMIN_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          KAKAO_CLIENT_ID: ${{ secrets.KAKAO_CLIENT_ID }}
+          KAKAO_CLIENT_SECRET: ${{ secrets.KAKAO_CLIENT_SECRET }}
         run: go run ./cmd/checkstatus
 
       - name: Commit status change (if any)
@@ -41,7 +43,7 @@ jobs:
             echo "No status change, skipping commit."
             exit 0
           fi
-          git config user.name "smu-uptime-bot"
+          git config user.name "smu-server-status-viewer-bot"
           git config user.email "actions@users.noreply.github.com"
           git add backend/data/status.json
           git commit -m "chore: record status change [skip ci]"
