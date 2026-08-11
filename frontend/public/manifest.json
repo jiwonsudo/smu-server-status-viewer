@@ -8,8 +8,8 @@
       "type": "image/x-icon"
     },
     {
-      "src": "sumung_cut.png",
-      "type": "image/png",
+      "src": "logo.webp",
+      "type": "image/webp",
       "sizes": "192x192"
     }
   ],

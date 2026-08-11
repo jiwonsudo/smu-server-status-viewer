@@ -1,8 +1,8 @@
 const Footer = () => {
   return (
-    <div className="absolute bottom-0 flex h-12.5 w-screen items-center justify-center bg-[#333B3D]">
-      <div className="text-[0.8em] text-[#D9D9D9]">&#169; 2025. Jiwon Jeong All rights reserved.</div>
-    </div>
+    <footer className="flex h-14 w-full shrink-0 items-center justify-center bg-[#1a1f2c]">
+      <p className="text-xs text-slate-400">&#169; 2026. Jiwon Jeong All rights reserved.</p>
+    </footer>
   );
 }
 
