@@ -32,7 +32,6 @@ var ServiceURL = map[string]string{
 	"CAREER":     "https://smcareer.smu.ac.kr/",
 	"CLOUD":      "https://cloud.smu.ac.kr/",
 	"DORM_SEOUL": "https://dormitory.smu.ac.kr/dormi/index.do",
-	"LIB_SEOUL":  "https://lib.smu.ac.kr/",
 }
 
 const browserUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"

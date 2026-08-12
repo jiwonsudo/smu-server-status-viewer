@@ -34,7 +34,6 @@ var monitoredServices = []monitoredService{
 	{"CAREER", "career"},
 	{"CLOUD", "cloud"},
 	{"DORM_SEOUL", "dorm-seoul"},
-	{"LIB_SEOUL", "lib-seoul"},
 }
 
 func main() {

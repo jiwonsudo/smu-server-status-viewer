@@ -8,5 +8,4 @@ export const SITE_INFOS = [
   { title: 'SM Challenge (진로·취업 포트폴리오)', url: 'https://smcareer.smu.ac.kr/', endpoint: '/status/career', siteKey: 'career' },
   { title: 'Office 365 (클라우드메일)', url: 'https://cloud.smu.ac.kr/', endpoint: '/status/cloud', siteKey: 'cloud' },
   { title: '학생생활관', url: 'https://dormitory.smu.ac.kr/dormi/index.do', endpoint: '/status/dorm-seoul', siteKey: 'dorm-seoul' },
-  { title: '학술정보관 (도서관)', url: 'https://lib.smu.ac.kr/', endpoint: '/status/lib-seoul', siteKey: 'lib-seoul' },
 ];

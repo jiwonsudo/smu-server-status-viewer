@@ -25,8 +25,8 @@ function AboutButton() {
         <h3 className="mt-4 font-semibold text-slate-800">확인하는 서비스</h3>
         <ul className="mt-1 list-disc space-y-0.5 pl-5">
           <li>홈페이지 / 이캠퍼스 / 샘물(통합정보시스템)</li>
-          <li>SM Challenge(진로·취업 포트폴리오) / SM-EDU / Office 365(클라우드메일)</li>
-          <li>학생생활관 / 입학안내 / 학교규정 / 학술정보관(도서관)</li>
+          <li>SM Challenge(진로·취업 포트폴리오) / Office 365(클라우드메일)</li>
+          <li>학생생활관</li>
         </ul>
 
         <h3 className="mt-4 font-semibold text-slate-800">신호등 색이 뜻하는 것</h3>

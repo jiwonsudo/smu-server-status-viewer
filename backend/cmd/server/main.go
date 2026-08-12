@@ -44,7 +44,6 @@ var statusRoutes = map[string]string{
 	"/status/career":     "CAREER",
 	"/status/cloud":      "CLOUD",
 	"/status/dorm-seoul": "DORM_SEOUL",
-	"/status/lib-seoul":  "LIB_SEOUL",
 }
 
 // validSiteKeys is the set of site keys the frontend is allowed to record a
@@ -52,7 +51,7 @@ var statusRoutes = map[string]string{
 // (frontend's SITE_INFOS).
 var validSiteKeys = map[string]bool{
 	"home": true, "ecampus": true, "sammul": true, "career": true,
-	"cloud": true, "dorm-seoul": true, "lib-seoul": true,
+	"cloud": true, "dorm-seoul": true,
 }
 
 func main() {
