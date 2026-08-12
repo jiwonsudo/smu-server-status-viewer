@@ -11,6 +11,8 @@ const text = {
 
   footer: {
     copyright: '© 2026. Jiwon Jeong All rights reserved.',
+    contactLabel: '건의사항 및 개선요청',
+    privacyLabel: '개인정보처리방침',
   },
 
   meta: {
@@ -37,41 +39,56 @@ const text = {
     alt: '스뮤온 — 상명대 서버 실시간 상태 확인',
     heading: '스뮤온',
     subheading: '상명대 서버 실시간 상태 확인',
-    footer: '이캠 안됨? 이캠퍼스(코스모스) 접속장애? 여기서 바로 확인하세요',
+    footer: '상명대 서버 접속 안될 때, 여기서 바로 확인하세요!',
   },
 
   nav: {
     about: '소개',
-    contact: '문의',
-    kakaoShort: '카톡알림받기',
-    kakaoLong: '카톡으로 알림받기',
+    faq: 'FAQ',
+    kakaoShort: '상태 알림받기',
+    kakaoLong: '카톡으로 서버상태 알림받기',
+    myPageSuffix: '님',
+    myPage: '마이페이지',
+    menuLabel: '메뉴',
+  },
+
+  mypage: {
+    greeting: (nickname) => `${nickname}님, 안녕하세요!`,
+    notLoggedInHeading: '로그인이 필요해요',
+    notLoggedInBody: '카카오 로그인을 하면 서버 상태 알림을 구독하고 관리할 수 있어요.',
+    noConsentNotice: '아직 "카카오톡 메시지 전송" 권한에 동의하지 않아서, 구독을 켜도 알림이 가지 않습니다.',
+    subscriptionsHeading: '알림 구독 관리',
+    subscriptionsHint: '켜둔 사이트가 다운되거나 복구되면 카카오톡으로 바로 알림이 와요.',
   },
 
   about: {
-    modalTitle: '스뮤온 — 상명대 서버 실시간 상태 확인',
+    modalTitle: '스뮤온 / 상명대 서버 실시간 상태 확인',
     intro:
-      '이캠 안됨, 이캠퍼스(코스모스) 접속장애처럼 상명대 서버가 이상할 때 제일 먼저 확인하는 곳입니다. 상명대학교 서울캠퍼스에서 자주 쓰는 주요 서비스 10곳의 접속 가능 여부와 응답 속도를 실시간으로 보여줍니다.',
-    servicesHeading: '확인하는 서비스',
+      '상명대학교 관련 웹사이트의 서버 오류가 의심될 때, 서버의 상태를 확인할 수 있는 서비스입니다. 서울캠퍼스 학우들이 자주 쓰는 주요 서비스들의 접속 가능 여부와 응답 속도를 실시간으로 보여줍니다.',
+    servicesHeading: '현 서비스 사이트 목록',
     services: [
-      '홈페이지 / 이캠퍼스 / 샘물(통합정보시스템)',
-      'SM Challenge(진로·취업 포트폴리오) / Office 365(클라우드메일)',
-      '학생생활관',
+      '상명대학교 메인 홈페이지',
+      '상명대학교 e-campus',
+      '상명대학교 샘물(통합정보시스템)',
+      'SM Challenge(진로·취업 포트폴리오)',
+      'Office 365(클라우드메일)',
+      '상명대 학생생활관 홈페이지',
     ],
-    colorHeading: '카드 왼쪽 테두리 색이 뜻하는 것',
-    colorOk: '정상 — 800ms 이내로 응답 (구글 웹 성능 기준 "Good")',
-    colorSlow: '느림 — 접속은 되지만 800ms 넘게 걸림',
-    colorDown: '응답 없음 — 5초 넘게 무응답이거나 오류 응답',
-    detailHint: '각 카드의 "상세 상태 보기"를 누르면 HTTP 상태 코드와 이유, 응답 시간을 자세히 볼 수 있습니다.',
-    intervalHeading: '점검 주기',
+    colorHeading: '각 상태 카드 왼쪽 테두리 색은 다음을 의미해요:',
+    colorOk: "정상 — 구글 웹 성능 기준 '좋음'인 800ms 이내로 응답한 경우",
+    colorSlow: '느림 — 접속은 가능하나 응답 시간이 800ms를 넘는 경우',
+    colorDown: '비정상 — 5초 넘게 응답이 없거나 실제 서버 장애가 있는 경우',
+    detailHint: '각 카드의 "상세 상태 보기"를 누르면 응답 시간을 비롯한 정보들을 자세히 볼 수 있어요.',
+    intervalHeading: '서버 상태 점검 주기',
     intervalBody:
-      '화면은 60초마다 자동으로 다시 확인합니다. 이와 별도로 5분마다 백그라운드에서도 점검해서 상태가 바뀐 기록을 남기고 있어요(추후 이메일·카카오톡 알림과 연동 예정).',
-    sortHeading: '정렬 / 즐겨찾기',
+      '서비스 사이트들의 서버 상태 정보는 15초마다 자동으로 갱신돼요.',
+    sortHeading: '즐겨찾기 / 정렬',
     sortBody:
-      '☆를 누르면 자주 보는 사이트를 목록 맨 위에 고정할 수 있어요(이 브라우저에만 저장됨). 정렬 기준은 이름순 또는 전체 방문자의 조회수 순으로 바꿀 수 있습니다.',
+      '☆을 누르면 자주 확인하는 사이트를 목록 맨 위에 고정할 수 있어요. 즐겨찾기 정보는 현재 브라우저에 저장됩니다. 정렬 기능은 이름순 또는 스뮤온 방문자의 사이트 조회수 순으로 바꿀 수 있습니다.',
   },
 
   contact: {
-    modalTitle: '문의 / 건의사항',
+    modalTitle: '건의사항 및 개선요청',
     intro: '이런 내용을 남겨주시면 도움이 됩니다.',
     reasons: [
       '사이트가 이상하게 동작하거나 오류가 보일 때 (버그 제보)',
@@ -102,6 +119,16 @@ const text = {
     loggedInSuffix: '님으로 로그인됨',
     logoutLabel: '로그아웃',
     loginLabel: '카카오 로그인',
+    withdrawLabel: '탈퇴하기',
+    withdrawConfirmTitle: '정말 탈퇴하시겠어요?',
+    withdrawConfirmBody:
+      '카카오 연결이 끊기고, 저장된 계정 정보와 알림 구독이 전부 즉시 삭제됩니다. 되돌릴 수 없습니다.',
+    withdrawConfirmCta: '탈퇴합니다',
+    withdrawCancelCta: '취소',
+    consentPromptTitle: '잠깐!',
+    consentPromptBody:
+      '카카오톡 알림을 받으려면 "카카오톡 메시지 전송" 권한에 동의해야 해요. 다음 화면에서 이 항목에 동의하지 않으면 구독을 켜도 알림이 오지 않습니다.',
+    consentPromptCta: '동의하러 가기',
   },
 
   faqHeading: '자주 묻는 질문',
@@ -109,7 +136,7 @@ const text = {
     {
       question: '이캠퍼스(코스모스)가 안 될 때 어떻게 확인하나요?',
       answer:
-        '이 페이지 상단의 "상명대학교 이캠퍼스" 카드에서 실시간 상태를 바로 확인할 수 있습니다. 60초마다 자동으로 다시 확인하며, "상세 상태 보기"를 누르면 서버가 실제로 보낸 응답 메시지도 볼 수 있습니다.',
+        '이 페이지 상단의 "상명대학교 이캠퍼스" 카드에서 실시간 상태를 바로 확인할 수 있습니다. 15초마다 자동으로 갱신되며, "상세 상태 보기"를 누르면 서버가 실제로 보낸 응답 메시지도 볼 수 있습니다.',
     },
     {
       question: '상명대 서버 장애 알림을 어떻게 받나요?',
@@ -130,15 +157,9 @@ const text = {
     checkingStatus: '서버 확인 중...',
     delayedResponseTime: '잠시만 기다려주세요',
     checkingResponseTime: '응답 확인 중...',
-    fetchFailStatus: '상태 점검 실패',
-    fetchFailResponseTime: '점검 실패',
-    rateLimitedStatus: '잠시 후 시도',
-    timeoutStatus: '매우 느림(비정상)',
     cacheChecking: '서버 확인 중...',
-    cacheAgeSuffix: (seconds) => `${seconds}초 전 서버 확인됨`,
-    rateLimitModalTitle: '잠시 후 다시 시도해주세요',
-    rateLimitModalBody:
-      '이 IP에서 너무 많이 확인해서 요청이 잠깐 제한됐습니다 (분당 20회 제한). SMU 서버 문제가 아니라 이 사이트 자체의 보호 장치이고, 1분 뒤 자동으로 풀립니다.',
+    cacheAgeSuffix: (seconds) => `${seconds}초 전 정보`,
+    nextUpdateSuffix: (seconds) => `${seconds}초 후 업데이트`,
   },
 
   statusBar: {
@@ -160,52 +181,92 @@ const text = {
     close: '닫기',
   },
 
-  // buildStatusDetail(백엔드가 실제로 응답한 경우)와 buildFetchErrorDetail(요청
-  // 자체가 실패한 경우)에서 쓰는 문구. reason은 카드에도(statusDetail.js가
-  // "비정상 (이유)" 형태로 조립) 그대로 쓰이니 너무 길게 쓰지 않는다.
+  // buildStatusDetail(statusDetail.js)에서 쓰는 문구. reason은 카드에도
+  // ("비정상 (이유)" 형태로 조립) 그대로 쓰이니 너무 길게 쓰지 않는다.
   statusDetail: {
     ok: {
       reason: '정상 서비스',
       explanationFast: '이 서버가 정상적으로 응답하고 있어요. 지금 바로 접속하셔도 문제없습니다.',
       explanationSlow: (responseTime) =>
-        `이 서버는 응답하고 있지만 평소보다 느립니다 (${responseTime}ms). 일반적으로 800ms 이내를 빠른 응답으로 보는데 지금은 그보다 오래 걸리고 있어요. 접속 자체는 되지만 페이지 로딩이 느릴 수 있습니다.`,
+        `이 서버는 요청에 응답하고 있지만, 응답 시간이 빠른 응답 시간의 기준인 800ms보다 느립니다 (${responseTime}ms). 접속 자체는 되지만, 페이지 로딩이 느릴 수 있어요.`,
     },
     timeout: {
-      reason: '타임아웃',
+      reason: '타임 아웃',
       explanation:
-        'SMU 서버가 5초 안에 응답하지 않았습니다. SMU 서버 자체가 느려졌거나 일시적으로 다운됐을 가능성이 높습니다. 잠시 후 다시 확인해보세요.',
+        '해당 서비스의 서버가 5초 안에 응답하지 않았습니다. 서버 자체가 매우 느려졌거나 일시적으로 다운되었을 가능성이 높아요. 잠시 후 다시 확인해보세요.',
     },
     httpError: {
       reason: '오류 응답',
       explanation: (code) =>
-        `SMU 서버가 정상 페이지 대신 오류 화면(HTTP ${code})을 돌려주고 있습니다. 서버 점검 중이거나, 페이지 주소가 바뀌었거나, 일시적인 오류일 수 있습니다.`,
+        `해당 서비스의 서버가 정상 페이지 대신 오류 화면(HTTP ${code})을 돌려주고 있습니다. 서버 점검 중이거나, 페이지 주소가 바뀌었거나, 일시적인 오류일 수 있습니다.`,
     },
     connectionFailure: {
       reason: '연결 실패',
-      explanation: 'SMU 서버에 아예 연결할 수 없는 상태입니다. 서버가 완전히 다운됐거나, 네트워크 설정이 바뀌었을 가능성이 있습니다.',
+      explanation: '해당 서비스의 서버에 아예 연결할 수 없는 상태입니다. 서버가 완전히 다운됐거나, 네트워크 설정이 바뀌었을 가능성이 있습니다.',
     },
     slowSuffix: ' (느림)',
     cardOkPrefix: (reason) => reason,
     cardBadPrefix: (reason) => `비정상 (${reason})`,
+  },
 
-    fetchRateLimited: {
-      reason: '요청 제한',
-      explanation:
-        '이 IP에서 너무 많이 확인해서 잠깐 제한됐습니다 (분당 20회 제한). 이건 SMU 서버가 아니라 이 상태 확인 사이트 자체의 보호 장치이고, 1분 뒤 자동으로 풀립니다.',
-    },
-    fetchTimeout: {
-      reason: '타임아웃',
-      explanation: '이 상태 확인 사이트의 백엔드가 15초 안에 응답하지 않았습니다.',
-    },
-    fetchHttpError: {
-      reason: '오류 응답',
-      explanation: (statusCode) => `이 상태 확인 사이트의 백엔드가 오류(HTTP ${statusCode})를 돌려줬습니다.`,
-    },
-    fetchConnectionFailure: {
-      reason: '연결 실패',
-      explanation:
-        '이 상태 확인 사이트의 백엔드 서버 자체에 연결할 수 없습니다. 사이트 관리자가 아직 배포하지 않았거나, 일시적인 네트워크 문제일 수 있습니다. (SMU 서버 문제가 아닙니다.)',
-    },
+  privacy: {
+    title: '개인정보처리방침',
+    updated: '2026년 8월 13일 시행',
+    intro:
+      '스뮤온(이하 "서비스")은 이용자의 개인정보를 소중히 다루며, 아래와 같이 개인정보를 수집·이용합니다.',
+    sections: [
+      {
+        heading: '1. 수집하는 개인정보 항목',
+        items: [
+          '카카오 로그인 시: 카카오 회원번호, 닉네임',
+          '카카오톡 알림 신청(선택 동의) 시: 카카오톡 메시지 전송 권한',
+          '문의하기 이용 시: 이름(선택), 이메일(선택), 문의 내용',
+          '자동 수집: 사이트별 클릭 수(개인을 식별할 수 없는 집계 데이터)',
+        ],
+      },
+      {
+        heading: '2. 개인정보의 수집 및 이용 목적',
+        items: [
+          '로그인 유지 및 카카오톡 알림 구독 관리',
+          '구독한 서비스의 상태가 바뀔 때 카카오톡 메시지 발송',
+          '문의 내용 확인 및 답변',
+          'Google Analytics, Vercel Speed Insights를 통한 서비스 이용 통계 분석',
+        ],
+      },
+      {
+        heading: '3. 개인정보의 보유 및 이용 기간',
+        items: [
+          '로그인 세션: 발급일로부터 30일 후 자동 만료',
+          '카카오 계정 정보 및 구독 정보: 이용자가 마이페이지에서 탈퇴하기 전까지 보관',
+          '문의 내용: 답변 후 별도로 보관하지 않으며 이메일로만 전달됩니다',
+        ],
+      },
+      {
+        heading: '4. 개인정보의 제3자 제공',
+        items: [
+          '서비스는 이용자의 개인정보를 원칙적으로 외부에 제공하지 않습니다',
+          '서비스 운영을 위해 카카오(로그인·메시지 발송), Google(이용 통계), Vercel(호스팅·성능 측정)에 최소한의 정보가 전달될 수 있습니다',
+        ],
+      },
+      {
+        heading: '5. 이용자의 권리',
+        items: [
+          '로그아웃 또는 사이트별 알림 구독 해제로 언제든 카카오톡 알림 수신을 중단할 수 있습니다',
+          '마이페이지의 "탈퇴하기"를 누르면 카카오 연결 해제와 함께 저장된 개인정보가 즉시, 자동으로 삭제됩니다(별도 요청 절차 없음)',
+        ],
+      },
+      {
+        heading: '6. 쿠키의 사용',
+        items: [
+          '로그인 상태 유지를 위한 세션 쿠키를 사용합니다',
+          'Google Analytics의 이용 통계 수집 쿠키가 함께 사용될 수 있습니다',
+        ],
+      },
+      {
+        heading: '7. 문의처',
+        items: ['개인정보 관련 문의는 하단의 "건의사항 및 개선요청"을 통해 접수해주세요.'],
+      },
+    ],
   },
 
   // siteInfos.js가 URL/endpoint 같은 데이터와 함께 이 title/alias를 조합해서 쓴다.

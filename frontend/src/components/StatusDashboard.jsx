@@ -4,15 +4,14 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import axios from 'axios';
 import StatusBar from './statusbar';
 import InfoModal from './InfoModal';
-import { computeDisplayStatus, buildFetchErrorDetail } from '../lib/statusDetail';
+import { computeDisplayStatus } from '../lib/statusDetail';
 import { useAuth } from '../lib/AuthContext';
 import { URL_ROOT } from '../lib/config';
 import { SITE_INFOS } from '../lib/siteInfos';
 import text from '../lib/text';
 
-const REFRESH_INTERVAL_MS = 60 * 1000;
+const CLICK_REFRESH_INTERVAL_MS = 60 * 1000; // 조회수는 실시간성이 중요하지 않아 더 느리게
 const DELAY_NOTICE_MS = 8 * 1000; // Render 콜드스타트 대응: 이 시간 이상 응답이 없으면 지연 문구 표시
-const REQUEST_TIMEOUT_MS = 15 * 1000; // 이거 없으면 백엔드가 느릴 때 요청이 끝없이 매달림
 
 const PIN_STORAGE_KEY = 'smu-status-pins';
 
@@ -33,9 +32,11 @@ function StatusDashboard({ initialStatusData = {} }) {
   const [clickCounts, setClickCounts] = useState({}); // 백엔드(Postgres)에 집계된 전체 방문자 클릭 수
   const [subscriptions, setSubscriptions] = useState([]); // 카카오 로그인한 유저가 알림 켜둔 사이트
   const [now, setNow] = useState(() => Date.now());
-  const [rateLimited, setRateLimited] = useState(false);
+  const [nextUpdateAtMs, setNextUpdateAtMs] = useState(null);
+  const [showConsentPrompt, setShowConsentPrompt] = useState(false);
+  const [footerVisible, setFooterVisible] = useState(false);
 
-  const { loggedIn } = useAuth();
+  const { loggedIn, notifyConsent, loginUrl } = useAuth();
   const siteInfos = useMemo(() => SITE_INFOS, []);
   const delayTimerRef = useRef(null);
 
@@ -52,6 +53,16 @@ function StatusDashboard({ initialStatusData = {} }) {
     return () => clearInterval(tick);
   }, []);
 
+  // 배지가 position:fixed라 스크롤을 맨 밑까지 내리면 푸터를 가리는 문제가
+  // 있었다 — 푸터가 화면에 보이기 시작하면 배지를 슬쩍 숨긴다.
+  useEffect(() => {
+    const footer = document.querySelector('footer');
+    if (!footer) return;
+    const observer = new IntersectionObserver(([entry]) => setFooterVisible(entry.isIntersecting));
+    observer.observe(footer);
+    return () => observer.disconnect();
+  }, []);
+
   useEffect(() => {
     const fetchClickCounts = () => {
       axios
@@ -63,69 +74,48 @@ function StatusDashboard({ initialStatusData = {} }) {
     };
 
     fetchClickCounts();
-    const intervalId = setInterval(fetchClickCounts, REFRESH_INTERVAL_MS);
+    const intervalId = setInterval(fetchClickCounts, CLICK_REFRESH_INTERVAL_MS);
     return () => clearInterval(intervalId);
   }, []);
 
-  // 재귀 setTimeout으로 REFRESH_INTERVAL_MS마다 우리 백엔드에 다시 물어본다.
-  // 백엔드는 이제 매번 SMU에 라이브로 접속하지 않고 10초 주기 캐시를 즉시
-  // 돌려주므로, 이 요청은 가볍다 — 그래서 예전엔 있던 "지금 새로고침" 수동
-  // 트리거 버튼은 없앴다(더 이상 누른다고 더 최신 정보가 나오지 않는다).
+  // 상태는 폴링하지 않고 백엔드가 갱신될 때마다 밀어주는 SSE를 구독한다.
+  // 예전엔 프론트가 자기 타이머로 주기적으로 다시 물어봤는데, 그러면
+  // 백엔드의 갱신 주기와 어긋나는(두 개의 독립된 시계) 타이밍이 생겨서
+  // "N초 전" 표시가 튀는 문제가 있었다. 이제 시계가 백엔드 하나뿐이라
+  // 그런 어긋남 자체가 없다. nextUpdateAt도 서버가 계산해서 같이 보내준다.
   useEffect(() => {
-    let timeoutId;
-    let cancelled = false;
+    setIsDelayed(false);
+    delayTimerRef.current = setTimeout(() => setIsDelayed(true), DELAY_NOTICE_MS);
 
-    const runCycle = async () => {
-      setIsDelayed(false);
-      delayTimerRef.current = setTimeout(() => setIsDelayed(true), DELAY_NOTICE_MS);
+    const source = new EventSource(`${URL_ROOT}/status/stream`);
 
-      const promises = siteInfos.map((siteInfo) => {
-        return axios
-          .get(`${URL_ROOT}${siteInfo.endpoint}`, { timeout: REQUEST_TIMEOUT_MS })
-          .then((response) => {
-            const { status, message, responseTime, checkedAt } = response.data;
-            const entry = computeDisplayStatus(siteInfo.title, { status, message, responseTime, checkedAt });
-            setStatusData((prevData) => ({ ...prevData, [siteInfo.endpoint]: entry }));
-          })
-          .catch((error) => {
-            let statusMsg = text.dashboard.fetchFailStatus;
-            let statusColor = '#d9534f'; // red
-            let responseTime = text.dashboard.fetchFailResponseTime;
-
-            if (error.response && error.response.status === 429) {
-              statusMsg = text.dashboard.rateLimitedStatus;
-              responseTime = 'N/A';
-              setRateLimited(true);
-            } else if (error.code === 'ECONNABORTED') {
-              statusMsg = text.dashboard.timeoutStatus;
-              responseTime = 'N/A';
-            }
-
-            const detail = buildFetchErrorDetail(error);
-
-            setStatusData((prevData) => ({
-              ...prevData,
-              [siteInfo.endpoint]: { statusMsg, statusColor, responseTime, checkedAt: null, detail },
-            }));
-          });
-      });
-
-      await Promise.all(promises);
+    source.onmessage = (event) => {
       clearTimeout(delayTimerRef.current);
       setIsDelayed(false);
 
-      if (cancelled) return;
-      timeoutId = setTimeout(runCycle, REFRESH_INTERVAL_MS);
-    };
+      let payload;
+      try {
+        payload = JSON.parse(event.data);
+      } catch {
+        return;
+      }
 
-    runCycle();
+      const nextEntries = {};
+      for (const [endpoint, result] of Object.entries(payload.sites || {})) {
+        nextEntries[endpoint] = computeDisplayStatus(endpoint, result);
+      }
+      setStatusData((prevData) => ({ ...prevData, ...nextEntries }));
+
+      if (payload.nextUpdateAt) {
+        setNextUpdateAtMs(new Date(payload.nextUpdateAt).getTime());
+      }
+    };
 
     return () => {
-      cancelled = true;
-      clearTimeout(timeoutId);
       clearTimeout(delayTimerRef.current);
+      source.close();
     };
-  }, [siteInfos]);
+  }, []);
 
   useEffect(() => {
     if (!loggedIn) {
@@ -140,6 +130,15 @@ function StatusDashboard({ initialStatusData = {} }) {
 
   const toggleSubscription = (siteKey) => {
     const isSubscribed = subscriptions.includes(siteKey);
+
+    // 구독을 켜려는 시도인데 아직 talk_message(나에게 보내기) 권한이 없으면,
+    // 켠 척만 하고 실제로는 알림이 안 가는 상태를 만들지 않도록 먼저 안내한다.
+    // (서버도 이 권한 없이 온 구독 요청은 403으로 거부하니 이건 이중 방어다.)
+    if (!isSubscribed && !notifyConsent) {
+      setShowConsentPrompt(true);
+      return;
+    }
+
     setSubscriptions((prev) => (isSubscribed ? prev.filter((key) => key !== siteKey) : [...prev, siteKey]));
 
     axios({
@@ -198,6 +197,8 @@ function StatusDashboard({ initialStatusData = {} }) {
 
   const cacheAgeSeconds =
     latestCheckedAtMs != null ? Math.max(0, Math.round((now - latestCheckedAtMs) / 1000)) : null;
+  const secondsUntilNextUpdate =
+    nextUpdateAtMs != null ? Math.max(0, Math.round((nextUpdateAtMs - now) / 1000)) : null;
 
   return (
     <div>
@@ -243,14 +244,34 @@ function StatusDashboard({ initialStatusData = {} }) {
       </div>
 
       <div
-        className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-30 border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-500"
+        className={`fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-30 flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-500 shadow-sm transition-opacity duration-200 ${
+          footerVisible ? 'pointer-events-none opacity-0' : 'opacity-100'
+        }`}
         aria-live="off"
       >
-        {cacheAgeSeconds == null ? text.dashboard.cacheChecking : text.dashboard.cacheAgeSuffix(cacheAgeSeconds)}
+        <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${cacheAgeSeconds == null ? 'bg-slate-300' : 'bg-emerald-500'}`} />
+        {cacheAgeSeconds == null ? (
+          text.dashboard.cacheChecking
+        ) : (
+          <span>
+            {text.dashboard.cacheAgeSuffix(cacheAgeSeconds)}
+            {secondsUntilNextUpdate != null && ` · ${text.dashboard.nextUpdateSuffix(secondsUntilNextUpdate)}`}
+          </span>
+        )}
       </div>
 
-      <InfoModal open={rateLimited} onClose={() => setRateLimited(false)} title={text.dashboard.rateLimitModalTitle}>
-        <p>{text.dashboard.rateLimitModalBody}</p>
+      <InfoModal
+        open={showConsentPrompt}
+        onClose={() => setShowConsentPrompt(false)}
+        title={text.kakao.consentPromptTitle}
+      >
+        <p>{text.kakao.consentPromptBody}</p>
+        <a
+          href={loginUrl}
+          className="mt-4 flex min-h-11 items-center justify-center bg-[#FEE500] px-4 text-sm font-semibold text-[#391B1B] transition hover:brightness-95"
+        >
+          {text.kakao.consentPromptCta}
+        </a>
       </InfoModal>
     </div>
   );

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import DetailModal from '../DetailModal';
+import { StarIcon, BellIcon } from '../icons';
 import text from '../../lib/text';
 
 const StatusBar = (props) => {
@@ -12,17 +13,17 @@ const StatusBar = (props) => {
       className="border border-slate-200 border-l-4 bg-white p-4"
       style={{ borderLeftColor: props.statusColor }}
     >
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex min-w-0 items-start gap-2">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-0.5">
           <button
             type="button"
             onClick={props.onTogglePin}
             aria-pressed={props.pinned}
             aria-label={props.pinned ? text.statusBar.pinRemove : text.statusBar.pinAdd}
             title={props.pinned ? text.statusBar.pinRemove : text.statusBar.pinAdd}
-            className={`flex h-11 w-11 shrink-0 items-center justify-center text-xl leading-none ${props.pinned ? 'text-amber-400 hover:text-amber-500' : 'text-slate-300 hover:text-slate-400'}`}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md hover:bg-slate-50"
           >
-            {props.pinned ? '★' : '☆'}
+            <StarIcon filled={props.pinned} className={`h-4 w-4 ${props.pinned ? 'text-amber-400' : 'text-slate-300'}`} />
           </button>
           {props.loggedIn && (
             <button
@@ -31,12 +32,12 @@ const StatusBar = (props) => {
               aria-pressed={props.subscribed}
               aria-label={props.subscribed ? text.statusBar.subscribeOff : text.statusBar.subscribeOn}
               title={props.subscribed ? text.statusBar.subscribeOff : text.statusBar.subscribeOn}
-              className={`flex h-11 w-11 shrink-0 items-center justify-center text-lg leading-none ${props.subscribed ? 'text-[#391B1B]' : 'text-slate-300 hover:text-slate-400'}`}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md hover:bg-slate-50"
             >
-              {props.subscribed ? '🔔' : '🔕'}
+              <BellIcon filled={props.subscribed} className={`h-4 w-4 ${props.subscribed ? 'text-[#0E207F]' : 'text-slate-300'}`} />
             </button>
           )}
-          <div className="min-w-0 pt-2.5">
+          <div className="min-w-0 pl-1.5">
             <a
               href={props.href}
               target="_blank"

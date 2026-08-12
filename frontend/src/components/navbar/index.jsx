@@ -1,8 +1,6 @@
 import Link from 'next/link';
 import LOGO from '../../assets/logo.webp';
-import AboutButton from './AboutButton';
-import ContactButton from './ContactButton';
-import KakaoButton from './KakaoButton';
+import NavMenu from './NavMenu';
 import text from '../../lib/text';
 
 const Navbar = () => {
@@ -20,10 +18,8 @@ const Navbar = () => {
           <div className="truncate text-[10px] text-white/60 sm:text-xs">{text.site.tagline}</div>
         </div>
       </Link>
-      <nav className="flex shrink-0 items-center gap-0.5 text-sm sm:gap-1">
-        <AboutButton />
-        <ContactButton />
-        <KakaoButton />
+      <nav className="flex shrink-0 items-center text-sm">
+        <NavMenu />
       </nav>
     </header>
   );
