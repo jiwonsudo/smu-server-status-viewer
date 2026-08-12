@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
+	"smu-server-status-viewer/backend/internal/apitext"
 	"smu-server-status-viewer/backend/internal/clickstore"
 	"smu-server-status-viewer/backend/internal/db"
 	"smu-server-status-viewer/backend/internal/kakaoauth"
@@ -155,7 +157,7 @@ func statusHandler(cache *statuscache.Cache, serviceKey string) http.HandlerFunc
 		result, ok := cache.Get(serviceKey)
 		if !ok {
 			w.WriteHeader(http.StatusServiceUnavailable)
-			json.NewEncoder(w).Encode(map[string]string{"message": "아직 첫 점검 중입니다"})
+			json.NewEncoder(w).Encode(map[string]string{"message": apitext.StatusCheckPending})
 			return
 		}
 		json.NewEncoder(w).Encode(result)
@@ -305,7 +307,7 @@ func randomState() (string, error) {
 
 func kakaoLoginHandler(w http.ResponseWriter, r *http.Request) {
 	if !kakaoauth.Configured() {
-		http.Error(w, "카카오 로그인이 아직 설정되지 않았습니다.", http.StatusServiceUnavailable)
+		http.Error(w, apitext.KakaoNotConfigured, http.StatusServiceUnavailable)
 		return
 	}
 
@@ -331,7 +333,7 @@ func kakaoCallbackHandler(userStore *userstore.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		stateCookie, err := r.Cookie(oauthStateCookieName)
 		if err != nil || stateCookie.Value == "" || stateCookie.Value != r.URL.Query().Get("state") {
-			http.Error(w, "잘못된 로그인 요청입니다.", http.StatusBadRequest)
+			http.Error(w, apitext.InvalidLoginRequest, http.StatusBadRequest)
 			return
 		}
 		http.SetCookie(w, &http.Cookie{
@@ -340,21 +342,21 @@ func kakaoCallbackHandler(userStore *userstore.Store) http.HandlerFunc {
 
 		code := r.URL.Query().Get("code")
 		if code == "" {
-			http.Error(w, "인가 코드가 없습니다.", http.StatusBadRequest)
+			http.Error(w, apitext.MissingAuthCode, http.StatusBadRequest)
 			return
 		}
 
 		tokens, err := kakaoauth.ExchangeCode(r.Context(), code)
 		if err != nil {
 			log.Printf("[auth] 토큰 교환 실패: %v", err)
-			http.Error(w, "로그인 처리 중 오류가 발생했습니다.", http.StatusBadGateway)
+			http.Error(w, apitext.LoginProcessingError, http.StatusBadGateway)
 			return
 		}
 
 		profile, err := kakaoauth.FetchProfile(r.Context(), tokens.AccessToken)
 		if err != nil {
 			log.Printf("[auth] 프로필 조회 실패: %v", err)
-			http.Error(w, "로그인 처리 중 오류가 발생했습니다.", http.StatusBadGateway)
+			http.Error(w, apitext.LoginProcessingError, http.StatusBadGateway)
 			return
 		}
 
@@ -367,14 +369,14 @@ func kakaoCallbackHandler(userStore *userstore.Store) http.HandlerFunc {
 			NotifyConsent: kakaoauth.HasTalkMessageScope(tokens.Scope),
 		}); err != nil {
 			log.Printf("[auth] 사용자 저장 실패: %v", err)
-			http.Error(w, "로그인 처리 중 오류가 발생했습니다.", http.StatusInternalServerError)
+			http.Error(w, apitext.LoginProcessingError, http.StatusInternalServerError)
 			return
 		}
 
 		sessionToken, err := userStore.CreateSession(r.Context(), profile.ID, sessionTTL)
 		if err != nil {
 			log.Printf("[auth] 세션 생성 실패: %v", err)
-			http.Error(w, "로그인 처리 중 오류가 발생했습니다.", http.StatusInternalServerError)
+			http.Error(w, apitext.LoginProcessingError, http.StatusInternalServerError)
 			return
 		}
 
@@ -497,6 +499,7 @@ func subscribeHandler(userStore *userstore.Store) http.HandlerFunc {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+		go notifyUser(userStore, user, apitext.SubscribeConfirm(apitext.SiteName(site)))
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
@@ -514,7 +517,30 @@ func unsubscribeHandler(userStore *userstore.Store) http.HandlerFunc {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+		if user.NotifyConsent {
+			go notifyUser(userStore, user, apitext.UnsubscribeConfirm(apitext.SiteName(site)))
+		}
 		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// notifyUser는 구독 on/off 확인 메시지처럼, HTTP 응답을 막지 않아도 되는
+// 카카오톡 발송을 백그라운드로 보낸다. 액세스 토큰이 곧 만료될 것 같으면
+// (checkstatus의 알림 로직과 공유하는) kakaoauth.EnsureFreshToken이 먼저 갱신한다.
+func notifyUser(userStore *userstore.Store, user userstore.User, message string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	accessToken, err := kakaoauth.EnsureFreshToken(ctx, user.AccessToken, user.RefreshToken, user.ExpiresAt, func(t kakaoauth.TokenResult) error {
+		return userStore.UpdateTokens(ctx, user.KakaoID, t.AccessToken, t.RefreshToken, t.ExpiresAt)
+	})
+	if err != nil {
+		log.Printf("[kakao] 유저 %d 토큰 갱신 실패: %v", user.KakaoID, err)
+		return
+	}
+
+	if err := kakaoauth.SendToMe(ctx, accessToken, message, "https://issmuok.site"); err != nil {
+		log.Printf("[kakao] 유저 %d 알림 발송 실패: %v", user.KakaoID, err)
 	}
 }
 
@@ -541,28 +567,28 @@ func contactHandler(w http.ResponseWriter, r *http.Request) {
 	var req contactRequest
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxContactMessageBytes)).Decode(&req); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"message": "요청 형식이 올바르지 않습니다."})
+		json.NewEncoder(w).Encode(map[string]string{"message": apitext.InvalidRequestFormat})
 		return
 	}
 
 	if req.Website != "" {
 		// Silently pretend success to a bot so it doesn't learn to adapt.
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]string{"message": "전송되었습니다."})
+		json.NewEncoder(w).Encode(map[string]string{"message": apitext.ContactMessageSent})
 		return
 	}
 
 	req.Message = strings.TrimSpace(req.Message)
 	if req.Message == "" {
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"message": "문의 내용을 입력해주세요."})
+		json.NewEncoder(w).Encode(map[string]string{"message": apitext.ContactMessageMissing})
 		return
 	}
 
 	mailer.SendContactMessage(strings.TrimSpace(req.Name), strings.TrimSpace(req.Email), req.Message)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"message": "전송되었습니다."})
+	json.NewEncoder(w).Encode(map[string]string{"message": apitext.ContactMessageSent})
 }
 
 // ---- 미들웨어 ----
@@ -603,9 +629,7 @@ func rateLimitMiddleware(limiter, statusLimiter *ratelimit.Limiter, next http.Ha
 		if !activeLimiter.Allow(clientIP(r)) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusTooManyRequests)
-			json.NewEncoder(w).Encode(map[string]string{
-				"message": "Too many requests from this IP, please try again a minute later.",
-			})
+			json.NewEncoder(w).Encode(map[string]string{"message": apitext.RateLimited})
 			return
 		}
 		next.ServeHTTP(w, r)

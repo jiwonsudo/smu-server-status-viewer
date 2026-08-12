@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"gopkg.in/gomail.v2"
+	"smu-server-status-viewer/backend/internal/apitext"
 )
 
 func SendStatusChangeEmail(serviceName, previousStatus, currentStatus string) {
@@ -37,17 +38,14 @@ func SendStatusChangeEmail(serviceName, previousStatus, currentStatus string) {
 
 	prev := previousStatus
 	if prev == "" {
-		prev = "알수없음"
+		prev = apitext.UnknownStatusLabel
 	}
 
 	m := gomail.NewMessage()
 	m.SetHeader("From", from)
 	m.SetHeader("To", to)
-	m.SetHeader("Subject", fmt.Sprintf("[SMU 서버 상태] %s: %s -> %s", serviceName, prev, currentStatus))
-	m.SetBody("text/plain", fmt.Sprintf(
-		"%s 서비스 상태가 변경되었습니다.\n\n이전 상태: %s\n현재 상태: %s\n시각: %s",
-		serviceName, prev, currentStatus, time.Now().Format("2006-01-02 15:04:05"),
-	))
+	m.SetHeader("Subject", apitext.StatusChangeEmailSubject(serviceName, prev, currentStatus))
+	m.SetBody("text/plain", apitext.StatusChangeEmailBody(serviceName, prev, currentStatus, time.Now().Format("2006-01-02 15:04:05")))
 
 	d := gomail.NewDialer(host, port, user, pass)
 	if err := d.DialAndSend(m); err != nil {
@@ -83,7 +81,7 @@ func SendContactMessage(name, senderEmail, message string) {
 
 	displayName := name
 	if displayName == "" {
-		displayName = "익명"
+		displayName = apitext.AnonymousSender
 	}
 
 	m := gomail.NewMessage()
@@ -92,11 +90,8 @@ func SendContactMessage(name, senderEmail, message string) {
 	if senderEmail != "" {
 		m.SetHeader("Reply-To", senderEmail)
 	}
-	m.SetHeader("Subject", fmt.Sprintf("[SMU 서버상태] 문의/건의사항 - %s", displayName))
-	m.SetBody("text/plain", fmt.Sprintf(
-		"보낸 사람: %s\n답장 받을 이메일: %s\n시각: %s\n\n%s",
-		displayName, orDash(senderEmail), time.Now().Format("2006-01-02 15:04:05"), message,
-	))
+	m.SetHeader("Subject", apitext.ContactEmailSubject(displayName))
+	m.SetBody("text/plain", apitext.ContactEmailBody(displayName, orDash(senderEmail), time.Now().Format("2006-01-02 15:04:05"), message))
 
 	d := gomail.NewDialer(host, port, user, pass)
 	if err := d.DialAndSend(m); err != nil {
@@ -106,7 +101,7 @@ func SendContactMessage(name, senderEmail, message string) {
 
 func orDash(s string) string {
 	if s == "" {
-		return "(입력 안 함)"
+		return apitext.NoEmailProvided
 	}
 	return s
 }

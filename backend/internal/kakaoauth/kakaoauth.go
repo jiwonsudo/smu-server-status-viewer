@@ -17,6 +17,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"smu-server-status-viewer/backend/internal/apitext"
 )
 
 const (
@@ -120,6 +122,27 @@ func RefreshAccessToken(ctx context.Context, refreshToken string) (TokenResult, 
 	return result, nil
 }
 
+// EnsureFreshToken returns an access token guaranteed to still be valid,
+// refreshing it first if expiresAt is within a minute (or already past).
+// On refresh, onRefreshed is called with the new tokens so the caller can
+// persist them — a failure to persist is logged by the caller, not fatal
+// here, since the refreshed token is still usable for this one call.
+// This used to be duplicated (slightly differently) in both cmd/server's
+// subscribe-confirmation notify and cmd/checkstatus's subscriber alert loop.
+func EnsureFreshToken(ctx context.Context, accessToken, refreshToken string, expiresAt time.Time, onRefreshed func(TokenResult) error) (string, error) {
+	if time.Now().Before(expiresAt.Add(-time.Minute)) {
+		return accessToken, nil
+	}
+	refreshed, err := RefreshAccessToken(ctx, refreshToken)
+	if err != nil {
+		return "", err
+	}
+	if onRefreshed != nil {
+		_ = onRefreshed(refreshed)
+	}
+	return refreshed.AccessToken, nil
+}
+
 func doTokenRequest(ctx context.Context, form url.Values) (TokenResult, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tokenURL, strings.NewReader(form.Encode()))
 	if err != nil {
@@ -198,7 +221,7 @@ func FetchProfile(ctx context.Context, accessToken string) (KakaoProfile, error)
 
 	nickname := parsed.KakaoAccount.Profile.Nickname
 	if nickname == "" {
-		nickname = "카카오 사용자"
+		nickname = apitext.FallbackNickname
 	}
 	return KakaoProfile{ID: parsed.ID, Nickname: nickname}, nil
 }
@@ -212,7 +235,7 @@ func SendToMe(ctx context.Context, accessToken, text, linkURL string) error {
 			"web_url":        linkURL,
 			"mobile_web_url": linkURL,
 		},
-		"button_title": "상태 확인하러 가기",
+		"button_title": apitext.StatusCheckButton,
 	}
 	templateJSON, err := json.Marshal(template)
 	if err != nil {

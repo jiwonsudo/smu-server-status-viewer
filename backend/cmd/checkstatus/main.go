@@ -8,9 +8,9 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/joho/godotenv"
+	"smu-server-status-viewer/backend/internal/apitext"
 	"smu-server-status-viewer/backend/internal/db"
 	"smu-server-status-viewer/backend/internal/kakaoauth"
 	"smu-server-status-viewer/backend/internal/mailer"
@@ -66,7 +66,7 @@ func main() {
 
 		if change.Changed {
 			anyChanged = true
-			prevLabel := "(최초 기록)"
+			prevLabel := apitext.FirstRecordLabel
 			if change.HadPrevious {
 				prevLabel = change.PreviousStatus
 			}
@@ -101,29 +101,19 @@ func notifyKakaoSubscribers(ctx context.Context, userStore *userstore.Store, sit
 		return
 	}
 
-	statusLabel := "복구됨"
-	if currentStatus != "ok" {
-		statusLabel = "다운됨"
-	}
-	text := fmt.Sprintf("[SMU 서버상태] %s: %s -> %s (%s)", serviceKey, previousStatus, currentStatus, statusLabel)
-	linkURL := "https://issmuok.site"
+	message := apitext.StatusChangeKakaoMessage(serviceKey, previousStatus, currentStatus)
+	const linkURL = "https://issmuok.site"
 
 	for _, user := range subscribers {
-		accessToken := user.AccessToken
-
-		if time.Now().After(user.ExpiresAt.Add(-time.Minute)) {
-			refreshed, err := kakaoauth.RefreshAccessToken(ctx, user.RefreshToken)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "[kakao] 유저 %d 토큰 갱신 실패: %v\n", user.KakaoID, err)
-				continue
-			}
-			if err := userStore.UpdateTokens(ctx, user.KakaoID, refreshed.AccessToken, refreshed.RefreshToken, refreshed.ExpiresAt); err != nil {
-				fmt.Fprintf(os.Stderr, "[kakao] 유저 %d 토큰 저장 실패: %v\n", user.KakaoID, err)
-			}
-			accessToken = refreshed.AccessToken
+		accessToken, err := kakaoauth.EnsureFreshToken(ctx, user.AccessToken, user.RefreshToken, user.ExpiresAt, func(t kakaoauth.TokenResult) error {
+			return userStore.UpdateTokens(ctx, user.KakaoID, t.AccessToken, t.RefreshToken, t.ExpiresAt)
+		})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "[kakao] 유저 %d 토큰 갱신 실패: %v\n", user.KakaoID, err)
+			continue
 		}
 
-		if err := kakaoauth.SendToMe(ctx, accessToken, text, linkURL); err != nil {
+		if err := kakaoauth.SendToMe(ctx, accessToken, message, linkURL); err != nil {
 			fmt.Fprintf(os.Stderr, "[kakao] 유저 %d 발송 실패: %v\n", user.KakaoID, err)
 		}
 	}

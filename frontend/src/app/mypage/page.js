@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import axios from 'axios';
 import { useAuth } from '../../lib/AuthContext';
 import { URL_ROOT } from '../../lib/config';
@@ -12,6 +13,15 @@ export default function MyPage() {
   const { loggedIn, nickname, loading, notifyConsent, logout, withdraw, loginUrl } = useAuth();
   const [subscriptions, setSubscriptions] = useState([]);
   const [confirmingWithdraw, setConfirmingWithdraw] = useState(false);
+  const router = useRouter();
+
+  const handleLogout = () => {
+    logout().then(() => router.push('/'));
+  };
+
+  const handleWithdraw = () => {
+    withdraw().then(() => router.push('/'));
+  };
 
   useEffect(() => {
     if (!loggedIn) return;
@@ -96,7 +106,7 @@ export default function MyPage() {
             <div className="mt-3 flex gap-2">
               <button
                 type="button"
-                onClick={withdraw}
+                onClick={handleWithdraw}
                 className="flex min-h-10 flex-1 items-center justify-center bg-rose-600 px-3 text-sm font-semibold text-white transition hover:bg-rose-700"
               >
                 {text.kakao.withdrawConfirmCta}
@@ -114,7 +124,7 @@ export default function MyPage() {
           <div className="flex items-center justify-between">
             <button
               type="button"
-              onClick={logout}
+              onClick={handleLogout}
               className="text-sm text-slate-500 underline decoration-transparent underline-offset-2 hover:text-slate-700 hover:decoration-slate-400"
             >
               {text.kakao.logoutLabel}

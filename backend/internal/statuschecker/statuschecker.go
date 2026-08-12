@@ -6,10 +6,11 @@ package statuschecker
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net"
 	"net/http"
 	"time"
+
+	"smu-server-status-viewer/backend/internal/apitext"
 )
 
 // Result matches the JSON shape the Node/Express version returned.
@@ -62,7 +63,7 @@ func CheckServiceStatus(ctx context.Context, url string) Result {
 		return Result{
 			Status:       "error",
 			ResponseTime: int(time.Since(start).Milliseconds()),
-			Message:      "서비스 접속 실패",
+			Message:      apitext.StatusConnectionFailed,
 			Error:        err.Error(),
 		}
 	}
@@ -73,24 +74,24 @@ func CheckServiceStatus(ctx context.Context, url string) Result {
 
 	if err != nil {
 		if isTimeout(err) {
-			return Result{Status: "timeout", ResponseTime: "N/A", Message: "매우 느림(비정상)", Error: err.Error()}
+			return Result{Status: "timeout", ResponseTime: "N/A", Message: apitext.StatusTimeout, Error: err.Error()}
 		}
 		return Result{
 			Status:       "error",
 			ResponseTime: duration,
-			Message:      "서비스 접속 실패",
+			Message:      apitext.StatusConnectionFailed,
 			Error:        err.Error(),
 		}
 	}
 	defer resp.Body.Close() // 응답 바디는 필요 없으므로 읽지 않고 즉시 종료
 
 	if resp.StatusCode == http.StatusOK {
-		return Result{Status: "ok", ResponseTime: duration, Message: "정상 서비스"}
+		return Result{Status: "ok", ResponseTime: duration, Message: apitext.StatusOK}
 	}
 	return Result{
 		Status:       "error",
 		ResponseTime: duration,
-		Message:      fmt.Sprintf("서비스 비정상: %d", resp.StatusCode),
+		Message:      apitext.StatusHTTPError(resp.StatusCode),
 	}
 }
 

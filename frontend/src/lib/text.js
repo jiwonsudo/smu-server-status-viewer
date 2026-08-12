@@ -116,7 +116,6 @@ const text = {
     notConfiguredBody:
       '카카오 쪽 앱 등록과 메시지 전송 권한 승인이 끝나야 로그인 버튼이 실제로 동작합니다. 준비되는 대로 이 배지가 사라지고 바로 로그인할 수 있게 될게요.',
     loadingLabel: '로그인 상태 확인 중...',
-    loggedInSuffix: '님으로 로그인됨',
     logoutLabel: '로그아웃',
     loginLabel: '카카오 로그인',
     withdrawLabel: '탈퇴하기',
@@ -272,7 +271,7 @@ const text = {
   // siteInfos.js가 URL/endpoint 같은 데이터와 함께 이 title/alias를 조합해서 쓴다.
   sites: {
     home: { title: '상명대학교 홈페이지' },
-    ecampus: { title: '상명대학교 이캠퍼스', alias: '코스모스' },
+    ecampus: { title: '상명대학교 이캠퍼스' },
     sammul: { title: '상명대학교 샘물(통합정보시스템)' },
     career: { title: 'SM Challenge (진로·취업 포트폴리오)' },
     cloud: { title: 'Office 365 (클라우드메일)' },
