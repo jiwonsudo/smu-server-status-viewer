@@ -24,9 +24,13 @@ const (
 	tokenURL     = "https://kauth.kakao.com/oauth/token"
 	userInfoURL  = "https://kapi.kakao.com/v2/user/me"
 	sendToMeURL  = "https://kapi.kakao.com/v2/api/talk/memo/default/send"
+	unlinkURL    = "https://kapi.kakao.com/v1/user/unlink"
 
-	// talk_message: 카카오톡 메시지(나에게 보내기) 전송 동의항목.
-	scope = "talk_message"
+	// scope를 명시하면 카카오는 여기 나열한 항목만 요청한다(앱의 기본 동의항목으로
+	// 자동으로 채워주지 않는다) — profile_nickname을 안 넣으면 닉네임이 아예
+	// 안 넘어와서 FetchProfile이 항상 "카카오 사용자"로 폴백하게 된다.
+	// profile_nickname: 닉네임. talk_message: 카카오톡 메시지(나에게 보내기) 전송.
+	scope = "profile_nickname talk_message"
 )
 
 func clientID() string     { return os.Getenv("KAKAO_CLIENT_ID") }
@@ -54,6 +58,21 @@ type TokenResult struct {
 	AccessToken  string
 	RefreshToken string
 	ExpiresAt    time.Time
+	// Scope는 카카오가 실제로 부여한 동의항목 목록(공백 구분)이다. talk_message는
+	// "이용 중 동의"라 로그인할 때 사용자가 거부했을 수 있으므로, 매 로그인/재동의
+	// 때마다 이 값을 확인해서 실제로 나에게 보내기가 가능한지 판단해야 한다.
+	Scope string
+}
+
+// HasTalkMessageScope reports whether scope(토큰 응답의 공백 구분 문자열)에
+// talk_message(카카오톡 메시지 전송)가 포함돼 있는지 본다.
+func HasTalkMessageScope(scope string) bool {
+	for _, s := range strings.Fields(scope) {
+		if s == "talk_message" {
+			return true
+		}
+	}
+	return false
 }
 
 type tokenResponse struct {
@@ -61,6 +80,7 @@ type tokenResponse struct {
 	RefreshToken          string `json:"refresh_token"`
 	ExpiresIn             int    `json:"expires_in"`
 	RefreshTokenExpiresIn int    `json:"refresh_token_expires_in"`
+	Scope                 string `json:"scope"`
 }
 
 // ExchangeCode trades an OAuth authorization code for tokens.
@@ -130,6 +150,7 @@ func doTokenRequest(ctx context.Context, form url.Values) (TokenResult, error) {
 		AccessToken:  parsed.AccessToken,
 		RefreshToken: parsed.RefreshToken,
 		ExpiresAt:    time.Now().Add(time.Duration(parsed.ExpiresIn) * time.Second),
+		Scope:        parsed.Scope,
 	}, nil
 }
 
@@ -216,6 +237,29 @@ func SendToMe(ctx context.Context, accessToken, text, linkURL string) error {
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("kakao send-to-me failed (HTTP %d): %s", resp.StatusCode, string(body))
+	}
+	return nil
+}
+
+// Unlink는 카카오 쪽 앱 연결 자체를 끊는다("연결 끊기") — 회원 탈퇴 때 우리
+// DB만 지우고 끝내면 카카오 쪽엔 이 서비스와 연결된 계정이 그대로 남아있게
+// 되므로, 탈퇴 처리의 일부로 반드시 같이 호출해야 한다.
+func Unlink(ctx context.Context, accessToken string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, unlinkURL, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("kakao unlink failed (HTTP %d): %s", resp.StatusCode, string(body))
 	}
 	return nil
 }

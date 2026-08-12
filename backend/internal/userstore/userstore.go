@@ -31,8 +31,10 @@ func New(db *sql.DB) (*Store, error) {
 			access_token TEXT NOT NULL,
 			refresh_token TEXT NOT NULL,
 			token_expires_at TIMESTAMPTZ NOT NULL,
+			notify_consent BOOLEAN NOT NULL DEFAULT FALSE,
 			created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 		);
+		ALTER TABLE kakao_users ADD COLUMN IF NOT EXISTS notify_consent BOOLEAN NOT NULL DEFAULT FALSE;
 
 		CREATE TABLE IF NOT EXISTS kakao_sessions (
 			session_token TEXT PRIMARY KEY,
@@ -59,27 +61,31 @@ func (s *Store) Enabled() bool {
 }
 
 type User struct {
-	KakaoID      int64
-	Nickname     string
-	AccessToken  string
-	RefreshToken string
-	ExpiresAt    time.Time
+	KakaoID       int64
+	Nickname      string
+	AccessToken   string
+	RefreshToken  string
+	ExpiresAt     time.Time
+	NotifyConsent bool // talk_message(카카오톡 메시지 전송, "이용 중 동의") 실제 부여 여부
 }
 
-// UpsertUser records (or refreshes) a logged-in user's tokens.
+// UpsertUser records (or refreshes) a logged-in user's tokens. NotifyConsent
+// is set from the scope the token exchange actually returned — every login
+// re-requests talk_message, so this always reflects the user's latest choice.
 func (s *Store) UpsertUser(ctx context.Context, u User) error {
 	if s.db == nil {
 		return ErrDisabled
 	}
 	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO kakao_users (kakao_id, nickname, access_token, refresh_token, token_expires_at)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO kakao_users (kakao_id, nickname, access_token, refresh_token, token_expires_at, notify_consent)
+		VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT (kakao_id) DO UPDATE SET
 			nickname = EXCLUDED.nickname,
 			access_token = EXCLUDED.access_token,
 			refresh_token = EXCLUDED.refresh_token,
-			token_expires_at = EXCLUDED.token_expires_at
-	`, u.KakaoID, u.Nickname, u.AccessToken, u.RefreshToken, u.ExpiresAt)
+			token_expires_at = EXCLUDED.token_expires_at,
+			notify_consent = EXCLUDED.notify_consent
+	`, u.KakaoID, u.Nickname, u.AccessToken, u.RefreshToken, u.ExpiresAt, u.NotifyConsent)
 	return err
 }
 
@@ -125,11 +131,11 @@ func (s *Store) SessionUser(ctx context.Context, sessionToken string) (User, boo
 
 	var u User
 	err := s.db.QueryRowContext(ctx, `
-		SELECT u.kakao_id, u.nickname, u.access_token, u.refresh_token, u.token_expires_at
+		SELECT u.kakao_id, u.nickname, u.access_token, u.refresh_token, u.token_expires_at, u.notify_consent
 		FROM kakao_sessions s
 		JOIN kakao_users u ON u.kakao_id = s.kakao_id
 		WHERE s.session_token = $1 AND s.expires_at > now()
-	`, sessionToken).Scan(&u.KakaoID, &u.Nickname, &u.AccessToken, &u.RefreshToken, &u.ExpiresAt)
+	`, sessionToken).Scan(&u.KakaoID, &u.Nickname, &u.AccessToken, &u.RefreshToken, &u.ExpiresAt, &u.NotifyConsent)
 
 	if errors.Is(err, sql.ErrNoRows) {
 		return User{}, false, nil
@@ -145,6 +151,17 @@ func (s *Store) DeleteSession(ctx context.Context, sessionToken string) error {
 		return nil
 	}
 	_, err := s.db.ExecContext(ctx, `DELETE FROM kakao_sessions WHERE session_token = $1`, sessionToken)
+	return err
+}
+
+// DeleteUser는 계정 탈퇴 처리다. kakao_sessions/kakao_subscriptions가
+// kakao_users를 ON DELETE CASCADE로 참조하고 있어서, 이 한 줄로 로그인
+// 세션과 구독 정보까지 전부 같이 지워진다 — 즉시, 완전히 삭제됨.
+func (s *Store) DeleteUser(ctx context.Context, kakaoID int64) error {
+	if s.db == nil {
+		return ErrDisabled
+	}
+	_, err := s.db.ExecContext(ctx, `DELETE FROM kakao_users WHERE kakao_id = $1`, kakaoID)
 	return err
 }
 

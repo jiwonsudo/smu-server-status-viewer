@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -35,6 +36,10 @@ var allowedOrigins = map[string]bool{
 const sessionCookieName = "smu_session"
 const oauthStateCookieName = "smu_oauth_state"
 const sessionTTL = 30 * 24 * time.Hour
+
+// statusRefreshInterval은 statusCache 백그라운드 갱신 주기이자, SSE로
+// 프론트에 알려주는 "다음 업데이트까지" 계산의 기준이 되는 값이다.
+const statusRefreshInterval = 15 * time.Second
 
 // statusRoutes maps each public status-check path to the ServiceURL key it checks.
 var statusRoutes = map[string]string{
@@ -75,11 +80,11 @@ func main() {
 	statusLimiter := ratelimit.New(time.Minute, 1200)
 
 	// 요청이 올 때마다 SMU 사이트를 라이브로 찔러보면 방문자 수만큼
-	// SMU 쪽 트래픽이 그대로 늘어난다. 대신 백그라운드에서 10초마다
+	// SMU 쪽 트래픽이 그대로 늘어난다. 대신 백그라운드에서 15초마다
 	// 한 번만 전체 사이트를 확인해 캐시해두고, /status/* 요청은 그
 	// 캐시를 즉시 읽기만 한다 — 방문자가 몇 명이든 SMU로 나가는 요청은
-	// 항상 10초에 한 번, 6개로 고정된다.
-	statusCache := statuscache.New(10*time.Second, statuschecker.ServiceURL)
+	// 항상 15초에 한 번, 6개로 고정된다.
+	statusCache := statuscache.New(statusRefreshInterval, statuschecker.ServiceURL)
 
 	conn, err := db.Open(os.Getenv("DATABASE_URL"))
 	if err != nil {
@@ -108,7 +113,7 @@ func main() {
 
 	mux := http.NewServeMux()
 	// Render 무료 티어는 트래픽이 없으면 프로세스를 재운다 — 그러면 위
-	// statusCache의 10초 백그라운드 갱신도 같이 멈춘다. .github/workflows/
+	// statusCache의 백그라운드 갱신도 같이 멈춘다. .github/workflows/
 	// monitor.yml이 5분마다 이 경로를 찔러서(Render의 유휴 판정 기준인
 	// 15분보다 훨씬 짧게) 서버가 계속 깨어있게 만든다.
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -117,6 +122,11 @@ func main() {
 	for path, serviceKey := range statusRoutes {
 		mux.HandleFunc(path, statusHandler(statusCache, serviceKey))
 	}
+	// 프론트가 자기 타이머로 폴링하면 백엔드의 15초 갱신 주기랑 자연히
+	// 어긋나서(두 개의 독립된 시계) 표시되는 "N초 전" 값이 튀는 문제가
+	// 생긴다. 대신 SSE로 캐시가 갱신되는 그 순간 값을 그대로 밀어준다 —
+	// 시계가 백엔드 하나뿐이라 어긋날 일 자체가 없다.
+	mux.HandleFunc("GET /status/stream", statusStreamHandler(statusCache))
 	mux.HandleFunc("/contact", contactHandler)
 	mux.HandleFunc("POST /clicks/{site}", clickIncrementHandler(clickStore))
 	mux.HandleFunc("GET /clicks", clickListHandler(clickStore))
@@ -125,6 +135,7 @@ func main() {
 	mux.HandleFunc("GET /auth/kakao/callback", kakaoCallbackHandler(userStore))
 	mux.HandleFunc("GET /auth/me", authMeHandler(userStore))
 	mux.HandleFunc("POST /auth/logout", logoutHandler(userStore))
+	mux.HandleFunc("POST /auth/withdraw", withdrawHandler(userStore))
 
 	mux.HandleFunc("GET /subscriptions", subscriptionsListHandler(userStore))
 	mux.HandleFunc("PUT /subscriptions/{site}", subscribeHandler(userStore))
@@ -148,6 +159,73 @@ func statusHandler(cache *statuscache.Cache, serviceKey string) http.HandlerFunc
 			return
 		}
 		json.NewEncoder(w).Encode(result)
+	}
+}
+
+// statusStreamPayload is one SSE "data:" event's JSON body. Sites is keyed
+// by the same path the frontend already uses for statusData (e.g.
+// "/status/home"), so the client can drop this straight into that map.
+type statusStreamPayload struct {
+	Sites        map[string]statuschecker.Result `json:"sites"`
+	NextUpdateAt time.Time                       `json:"nextUpdateAt"`
+}
+
+func buildStatusStreamPayload(cache *statuscache.Cache) statusStreamPayload {
+	snapshot := cache.Snapshot()
+	sites := make(map[string]statuschecker.Result, len(statusRoutes))
+	for path, serviceKey := range statusRoutes {
+		if result, ok := snapshot[serviceKey]; ok {
+			sites[path] = result
+		}
+	}
+	return statusStreamPayload{Sites: sites, NextUpdateAt: cache.NextUpdateAt()}
+}
+
+// statusStreamHandler pushes the full status snapshot over Server-Sent
+// Events every time statusCache finishes a refresh, instead of making the
+// frontend poll on its own timer and drift out of sync with the backend's.
+func statusStreamHandler(cache *statuscache.Cache) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			http.Error(w, "streaming unsupported", http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
+		w.WriteHeader(http.StatusOK)
+
+		writeEvent := func() bool {
+			payload, err := json.Marshal(buildStatusStreamPayload(cache))
+			if err != nil {
+				return false
+			}
+			if _, err := fmt.Fprintf(w, "data: %s\n\n", payload); err != nil {
+				return false
+			}
+			flusher.Flush()
+			return true
+		}
+
+		if !writeEvent() { // 연결 직후 지금 상태를 바로 한 번 보내준다
+			return
+		}
+
+		updates, cancel := cache.Subscribe()
+		defer cancel()
+
+		for {
+			select {
+			case <-r.Context().Done(): // 클라이언트가 연결을 끊음
+				return
+			case _, ok := <-updates:
+				if !ok || !writeEvent() {
+					return
+				}
+			}
+		}
 	}
 }
 
@@ -281,11 +359,12 @@ func kakaoCallbackHandler(userStore *userstore.Store) http.HandlerFunc {
 		}
 
 		if err := userStore.UpsertUser(r.Context(), userstore.User{
-			KakaoID:      profile.ID,
-			Nickname:     profile.Nickname,
-			AccessToken:  tokens.AccessToken,
-			RefreshToken: tokens.RefreshToken,
-			ExpiresAt:    tokens.ExpiresAt,
+			KakaoID:       profile.ID,
+			Nickname:      profile.Nickname,
+			AccessToken:   tokens.AccessToken,
+			RefreshToken:  tokens.RefreshToken,
+			ExpiresAt:     tokens.ExpiresAt,
+			NotifyConsent: kakaoauth.HasTalkMessageScope(tokens.Scope),
 		}); err != nil {
 			log.Printf("[auth] 사용자 저장 실패: %v", err)
 			http.Error(w, "로그인 처리 중 오류가 발생했습니다.", http.StatusInternalServerError)
@@ -332,6 +411,7 @@ func authMeHandler(userStore *userstore.Store) http.HandlerFunc {
 			"loggedIn":        true,
 			"nickname":        user.Nickname,
 			"kakaoConfigured": kakaoauth.Configured(),
+			"notifyConsent":   user.NotifyConsent,
 		})
 	}
 }
@@ -341,6 +421,34 @@ func logoutHandler(userStore *userstore.Store) http.HandlerFunc {
 		if cookie, err := r.Cookie(sessionCookieName); err == nil {
 			_ = userStore.DeleteSession(r.Context(), cookie.Value)
 		}
+		clearSessionCookie(w)
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// withdrawHandler는 회원 탈퇴다 — 로그아웃과 다르게 세션만 지우는 게 아니라
+// 카카오 쪽 연결도 끊고(Unlink) DB의 계정/세션/구독 전부를 즉시 삭제한다.
+// 되돌릴 수 없다.
+func withdrawHandler(userStore *userstore.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user, ok := currentUser(r, userStore)
+		if !ok {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		if err := kakaoauth.Unlink(r.Context(), user.AccessToken); err != nil {
+			// 카카오 쪽 연결 끊기가 실패해도(토큰 만료 등) 우리 쪽 데이터는
+			// 반드시 지워야 한다 — 탈퇴 요청 자체를 막을 이유는 아니다.
+			log.Printf("[auth] 유저 %d 카카오 연결 끊기 실패: %v", user.KakaoID, err)
+		}
+
+		if err := userStore.DeleteUser(r.Context(), user.KakaoID); err != nil {
+			log.Printf("[auth] 유저 %d 탈퇴 처리 실패: %v", user.KakaoID, err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
 		clearSessionCookie(w)
 		w.WriteHeader(http.StatusNoContent)
 	}
@@ -376,6 +484,12 @@ func subscribeHandler(userStore *userstore.Store) http.HandlerFunc {
 		site := r.PathValue("site")
 		if !validSiteKeys[site] {
 			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		if !user.NotifyConsent {
+			// talk_message 동의 없이는 나에게 보내기 자체가 불가능하니, 프론트가
+			// 어떻게 요청하든 서버에서도 한 번 더 막는다 (프론트 체크는 우회 가능하므로).
+			w.WriteHeader(http.StatusForbidden)
 			return
 		}
 		if err := userStore.Subscribe(r.Context(), user.KakaoID, site); err != nil {

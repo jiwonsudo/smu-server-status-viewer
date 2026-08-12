@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import InfoModal from '../InfoModal';
 import KakaoNotify from '../KakaoNotify';
+import { ChatBubbleIcon } from '../icons';
 import text from '../../lib/text';
 
 function KakaoButton() {
@@ -13,8 +14,9 @@ function KakaoButton() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="ml-0.5 flex min-h-11 items-center rounded-full bg-[#FEE500] px-2.5 font-semibold text-[#391B1B] shadow-sm transition hover:brightness-95 sm:ml-1 sm:px-4"
+        className="flex min-h-9 items-center gap-1.5 rounded-md bg-[#FEE500] px-3 text-sm font-semibold text-[#391B1B] transition hover:brightness-95"
       >
+        <ChatBubbleIcon className="h-4 w-4 shrink-0" />
         <span className="sm:hidden">{text.nav.kakaoShort}</span>
         <span className="hidden sm:inline">{text.nav.kakaoLong}</span>
       </button>

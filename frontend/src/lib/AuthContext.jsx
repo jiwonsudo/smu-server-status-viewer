@@ -10,6 +10,7 @@ export function AuthProvider({ children }) {
   const [loggedIn, setLoggedIn] = useState(false);
   const [nickname, setNickname] = useState(null);
   const [kakaoConfigured, setKakaoConfigured] = useState(false);
+  const [notifyConsent, setNotifyConsent] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(() => {
@@ -19,11 +20,13 @@ export function AuthProvider({ children }) {
         setLoggedIn(!!response.data.loggedIn);
         setNickname(response.data.nickname || null);
         setKakaoConfigured(!!response.data.kakaoConfigured);
+        setNotifyConsent(!!response.data.notifyConsent);
       })
       .catch(() => {
         setLoggedIn(false);
         setNickname(null);
         setKakaoConfigured(false);
+        setNotifyConsent(false);
       })
       .finally(() => setLoading(false));
   }, []);
@@ -36,10 +39,17 @@ export function AuthProvider({ children }) {
     return axios.post(`${URL_ROOT}/auth/logout`, null, { withCredentials: true }).finally(refresh);
   }, [refresh]);
 
+  // 로그아웃과 다르게 되돌릴 수 없다 — 카카오 연결까지 끊고 DB의 계정/구독을 전부 지운다.
+  const withdraw = useCallback(() => {
+    return axios.post(`${URL_ROOT}/auth/withdraw`, null, { withCredentials: true }).finally(refresh);
+  }, [refresh]);
+
   const loginUrl = `${URL_ROOT}/auth/kakao/login`;
 
   return (
-    <AuthContext.Provider value={{ loggedIn, nickname, kakaoConfigured, loading, refresh, logout, loginUrl }}>
+    <AuthContext.Provider
+      value={{ loggedIn, nickname, kakaoConfigured, notifyConsent, loading, refresh, logout, withdraw, loginUrl }}
+    >
       {children}
     </AuthContext.Provider>
   );
