@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import text from '../lib/text';
 
 function InfoModal({ open, onClose, title, children }) {
   const closeButtonRef = useRef(null);
@@ -46,7 +47,7 @@ function InfoModal({ open, onClose, title, children }) {
             ref={closeButtonRef}
             type="button"
             onClick={onClose}
-            aria-label="닫기"
+            aria-label={text.infoModal.close}
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-2xl leading-none text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
           >
             &times;
@@ -60,7 +61,7 @@ function InfoModal({ open, onClose, title, children }) {
           onClick={onClose}
           className="mt-5 w-full rounded-xl bg-slate-100 py-3 text-sm font-medium text-slate-600 transition hover:bg-slate-200 sm:hidden"
         >
-          닫기
+          {text.infoModal.close}
         </button>
       </div>
     </div>,

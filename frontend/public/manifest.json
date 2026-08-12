@@ -1,6 +1,6 @@
 {
-  "short_name": "상명대 서버상태",
-  "name": "상명대학교 서버상태",
+  "short_name": "스뮤온",
+  "name": "스뮤온 — 상명대 서버 실시간 상태 확인",
   "icons": [
     {
       "src": "favicon.ico",
