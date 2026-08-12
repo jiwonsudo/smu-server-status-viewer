@@ -1,27 +1,27 @@
 {
   "CAREER": {
     "status": "ok",
-    "lastCheckedAt": "2026-08-12T18:30:19Z",
+    "lastCheckedAt": "2026-08-12T19:39:15Z",
     "lastChangedAt": "2026-08-11T11:58:20Z"
   },
   "CLOUD": {
     "status": "ok",
-    "lastCheckedAt": "2026-08-12T18:30:20Z",
+    "lastCheckedAt": "2026-08-12T19:39:16Z",
     "lastChangedAt": "2026-08-11T11:58:21Z"
   },
   "DORM_SEOUL": {
     "status": "ok",
-    "lastCheckedAt": "2026-08-12T18:30:21Z",
+    "lastCheckedAt": "2026-08-12T19:39:17Z",
     "lastChangedAt": "2026-08-11T23:11:56Z"
   },
   "ECAMPUS": {
     "status": "timeout",
-    "lastCheckedAt": "2026-08-12T18:30:17Z",
+    "lastCheckedAt": "2026-08-12T19:39:13Z",
     "lastChangedAt": "2026-08-10T08:25:04Z"
   },
   "HOME": {
     "status": "ok",
-    "lastCheckedAt": "2026-08-12T18:30:11Z",
+    "lastCheckedAt": "2026-08-12T19:39:07Z",
     "lastChangedAt": "2026-08-11T23:11:45Z"
   },
   "LIB_SEOUL": {
@@ -31,7 +31,7 @@
   },
   "SAMMUL": {
     "status": "ok",
-    "lastCheckedAt": "2026-08-12T18:30:12Z",
+    "lastCheckedAt": "2026-08-12T19:39:08Z",
     "lastChangedAt": "2026-08-10T08:24:59Z"
   }
 }
