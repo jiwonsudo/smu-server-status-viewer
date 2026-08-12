@@ -1,10 +1,11 @@
-// 백엔드 응답(또는 요청 자체의 실패)을 두 군데에 다른 수위로 보여준다:
+// 백엔드가 보낸 사이트 하나의 점검 결과(statuschecker.Result)를 두 군데에
+// 다른 수위로 보여준다:
 //  - 카드(statusMsg): "정상 서비스" / "비정상 (이유)"처럼 사람이 바로 읽는 말만.
 //  - "상세 상태 보기" 모달(detail): HTTP 코드까지 포함한 기술적인 요약
 //    ("HTTP 코드 · 이유", 연결됐으면 "응답시간 Nms")을 ok/timeout/error 어느
 //    경우든 같은 형태로 통일해서 보여준다.
-// Go/axios가 던지는 원본 영문 에러 메시지(err.Error())는 어느 쪽에도
-// 절대 그대로 노출하지 않는다 — 사용자에게는 의미 없는 영어일 뿐이라.
+// Go가 던지는 원본 영문 에러 메시지(err.Error())는 어느 쪽에도 절대
+// 그대로 노출하지 않는다 — 사용자에게는 의미 없는 영어일 뿐이라.
 //
 // 여기 나오는 문구 자체는 전부 lib/text.js의 statusDetail 섹션에서 가져온다 —
 // 문구만 고치려면 그 파일만 건드리면 된다.
@@ -61,7 +62,7 @@ export function buildStatusDetail({ status, message, responseTime }) {
 }
 
 // 상태 API 응답 하나를 카드에 필요한 형태(색/문구/상세)로 한 번에 계산한다.
-// 서버 컴포넌트(app/page.js)의 최초 fetch와 클라이언트 폴링
+// 서버 컴포넌트(app/page.js)의 최초 fetch와 클라이언트의 SSE 구독
 // (StatusDashboard.jsx) 둘 다 이 함수를 써서 로직이 갈라지지 않게 한다.
 export function computeDisplayStatus(siteTitle, { status, message, responseTime, checkedAt }) {
   const detail = buildStatusDetail({ status, message, responseTime });
@@ -90,42 +91,3 @@ export function computeDisplayStatus(siteTitle, { status, message, responseTime,
   };
 }
 
-export function buildFetchErrorDetail(error) {
-  if (error.response && error.response.status === 429) {
-    return {
-      ok: false,
-      explanation: text.statusDetail.fetchRateLimited.explanation,
-      httpCode: 429,
-      reason: text.statusDetail.fetchRateLimited.reason,
-      responseTimeMs: null,
-    };
-  }
-
-  if (error.code === 'ECONNABORTED') {
-    return {
-      ok: false,
-      explanation: text.statusDetail.fetchTimeout.explanation,
-      httpCode: null,
-      reason: text.statusDetail.fetchTimeout.reason,
-      responseTimeMs: null,
-    };
-  }
-
-  if (error.response) {
-    return {
-      ok: false,
-      explanation: text.statusDetail.fetchHttpError.explanation(error.response.status),
-      httpCode: error.response.status,
-      reason: text.statusDetail.fetchHttpError.reason,
-      responseTimeMs: null,
-    };
-  }
-
-  return {
-    ok: false,
-    explanation: text.statusDetail.fetchConnectionFailure.explanation,
-    httpCode: null,
-    reason: text.statusDetail.fetchConnectionFailure.reason,
-    responseTimeMs: null,
-  };
-}
