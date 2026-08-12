@@ -18,6 +18,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Render 무료 티어는 트래픽이 없으면 서버를 재우는데, 그러면 백엔드가
+      # 10초마다 자체적으로 도는 상태 캐시 갱신도 같이 멈춘다. 여기서 5분마다
+      # 찔러주면(Render의 유휴 판정 15분보다 짧음) 서버가 계속 깨어있는다.
+      - name: Ping backend to keep it awake
+        run: curl -fsS --max-time 20 https://api.issmuok.site/healthz || true
+
       - uses: actions/setup-go@v5
         with:
           go-version-file: backend/go.mod

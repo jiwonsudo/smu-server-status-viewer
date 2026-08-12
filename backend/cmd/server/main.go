@@ -17,6 +17,7 @@ import (
 	"smu-server-status-viewer/backend/internal/kakaoauth"
 	"smu-server-status-viewer/backend/internal/mailer"
 	"smu-server-status-viewer/backend/internal/ratelimit"
+	"smu-server-status-viewer/backend/internal/statuscache"
 	"smu-server-status-viewer/backend/internal/statuschecker"
 	"smu-server-status-viewer/backend/internal/userstore"
 )
@@ -64,6 +65,22 @@ func main() {
 
 	limiter := ratelimit.New(time.Minute, 20)
 
+	// /status/*는 이제 캐시를 읽기만 해서 비용이 거의 0이고, 방문자 수와
+	// SMU 쪽 트래픽이 완전히 분리됐다(아래 statusCache 참고). 그런데 주
+	// 이용자가 캠퍼스 와이파이(NAT) 뒤에 있어서 여러 학생이 같은 공인
+	// IP를 공유하는 경우가 흔하다 — 실제 장애로 다 같이 몰려서 새로고침
+	// 하는, 가장 막으면 안 되는 순간에 20/분에 걸릴 수 있다는 뜻이다.
+	// 그래서 이 라우트만 사실상 무제한에 가깝게 훨씬 넉넉하게 둔다.
+	// 이메일 발송/DB 쓰기가 있는 나머지 라우트는 기존 20/분을 유지한다.
+	statusLimiter := ratelimit.New(time.Minute, 1200)
+
+	// 요청이 올 때마다 SMU 사이트를 라이브로 찔러보면 방문자 수만큼
+	// SMU 쪽 트래픽이 그대로 늘어난다. 대신 백그라운드에서 10초마다
+	// 한 번만 전체 사이트를 확인해 캐시해두고, /status/* 요청은 그
+	// 캐시를 즉시 읽기만 한다 — 방문자가 몇 명이든 SMU로 나가는 요청은
+	// 항상 10초에 한 번, 6개로 고정된다.
+	statusCache := statuscache.New(10*time.Second, statuschecker.ServiceURL)
+
 	conn, err := db.Open(os.Getenv("DATABASE_URL"))
 	if err != nil {
 		log.Printf("[db] DATABASE_URL이 설정됐지만 연결에 실패해서 DB 없이 계속합니다: %v", err)
@@ -90,8 +107,15 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
+	// Render 무료 티어는 트래픽이 없으면 프로세스를 재운다 — 그러면 위
+	// statusCache의 10초 백그라운드 갱신도 같이 멈춘다. .github/workflows/
+	// monitor.yml이 5분마다 이 경로를 찔러서(Render의 유휴 판정 기준인
+	// 15분보다 훨씬 짧게) 서버가 계속 깨어있게 만든다.
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
 	for path, serviceKey := range statusRoutes {
-		mux.HandleFunc(path, statusHandler(statuschecker.ServiceURL[serviceKey]))
+		mux.HandleFunc(path, statusHandler(statusCache, serviceKey))
 	}
 	mux.HandleFunc("/contact", contactHandler)
 	mux.HandleFunc("POST /clicks/{site}", clickIncrementHandler(clickStore))
@@ -106,7 +130,7 @@ func main() {
 	mux.HandleFunc("PUT /subscriptions/{site}", subscribeHandler(userStore))
 	mux.HandleFunc("DELETE /subscriptions/{site}", unsubscribeHandler(userStore))
 
-	handler := rateLimitMiddleware(limiter, corsMiddleware(mux))
+	handler := rateLimitMiddleware(limiter, statusLimiter, corsMiddleware(mux))
 
 	log.Printf("Server running at http://localhost:%s", port)
 	if err := http.ListenAndServe(":"+port, handler); err != nil {
@@ -114,10 +138,15 @@ func main() {
 	}
 }
 
-func statusHandler(url string) http.HandlerFunc {
+func statusHandler(cache *statuscache.Cache, serviceKey string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		result := statuschecker.CheckServiceStatus(r.Context(), url)
 		w.Header().Set("Content-Type", "application/json")
+		result, ok := cache.Get(serviceKey)
+		if !ok {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			json.NewEncoder(w).Encode(map[string]string{"message": "아직 첫 점검 중입니다"})
+			return
+		}
 		json.NewEncoder(w).Encode(result)
 	}
 }
@@ -443,13 +472,21 @@ func corsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// rateLimitMiddleware mirrors the old express-rate-limit config: 20
-// requests per minute per client IP. Client IP is read from
-// X-Forwarded-For since Render sits in front as a reverse proxy
-// (equivalent of Express's `app.set('trust proxy', 1)`).
-func rateLimitMiddleware(limiter *ratelimit.Limiter, next http.Handler) http.Handler {
+// rateLimitMiddleware applies a per-IP rate limit: statusLimiter (very
+// generous, see where it's constructed) for /status/*, limiter (20/min) for
+// everything else. Client IP is read from X-Forwarded-For since Render sits
+// in front as a reverse proxy (equivalent of Express's
+// `app.set('trust proxy', 1)`) — and since the frontend's SSR fetch now
+// forwards the real visitor IP too (see StatusDashboardServer.js), this
+// actually identifies individual visitors instead of lumping all SSR
+// traffic under one shared IP.
+func rateLimitMiddleware(limiter, statusLimiter *ratelimit.Limiter, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !limiter.Allow(clientIP(r)) {
+		activeLimiter := limiter
+		if strings.HasPrefix(r.URL.Path, "/status/") {
+			activeLimiter = statusLimiter
+		}
+		if !activeLimiter.Allow(clientIP(r)) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusTooManyRequests)
 			json.NewEncoder(w).Encode(map[string]string{

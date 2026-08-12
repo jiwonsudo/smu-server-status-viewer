@@ -16,11 +16,16 @@ import (
 // ResponseTime is a number of milliseconds, except for the "timeout"
 // case where the JS version sent the string "N/A" — kept as `any` here
 // so the frontend doesn't need to change.
+//
+// CheckedAt isn't set here — CheckServiceStatus only performs the check.
+// statuscache.Cache fills it in when it stores the result, so the frontend
+// can show how stale the cached value is instead of re-checking live.
 type Result struct {
-	Status       string `json:"status"`
-	ResponseTime any    `json:"responseTime"`
-	Message      string `json:"message"`
-	Error        string `json:"error,omitempty"`
+	Status       string    `json:"status"`
+	ResponseTime any       `json:"responseTime"`
+	Message      string    `json:"message"`
+	Error        string    `json:"error,omitempty"`
+	CheckedAt    time.Time `json:"checkedAt"`
 }
 
 // 상명대 서울캠퍼스 대상 서비스만 관리한다 (천안캠퍼스 전용 사이트 제외).
