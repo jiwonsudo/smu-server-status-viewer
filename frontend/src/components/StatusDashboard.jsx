@@ -8,6 +8,7 @@ import { computeDisplayStatus, buildFetchErrorDetail } from '../lib/statusDetail
 import { useAuth } from '../lib/AuthContext';
 import { URL_ROOT } from '../lib/config';
 import { SITE_INFOS } from '../lib/siteInfos';
+import text from '../lib/text';
 
 const REFRESH_INTERVAL_MS = 60 * 1000;
 const DELAY_NOTICE_MS = 8 * 1000; // Render 콜드스타트 대응: 이 시간 이상 응답이 없으면 지연 문구 표시
@@ -31,9 +32,7 @@ function StatusDashboard({ initialStatusData = {} }) {
   const [pins, setPins] = useState([]);
   const [clickCounts, setClickCounts] = useState({}); // 백엔드(Postgres)에 집계된 전체 방문자 클릭 수
   const [subscriptions, setSubscriptions] = useState([]); // 카카오 로그인한 유저가 알림 켜둔 사이트
-  const [nextRefreshAt, setNextRefreshAt] = useState(() => Date.now() + REFRESH_INTERVAL_MS);
   const [now, setNow] = useState(() => Date.now());
-  const [refreshNonce, setRefreshNonce] = useState(0);
   const [rateLimited, setRateLimited] = useState(false);
 
   const { loggedIn } = useAuth();
@@ -47,7 +46,7 @@ function StatusDashboard({ initialStatusData = {} }) {
     setPins(loadJSON(PIN_STORAGE_KEY, []));
   }, []);
 
-  // 우측 하단 "N초 후 새로고침" 배지용 1초 틱.
+  // 우측 하단 "N초 전 확인됨" 배지가 1초마다 갱신되도록 하는 틱 — 새 요청은 안 보낸다.
   useEffect(() => {
     const tick = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(tick);
@@ -68,8 +67,10 @@ function StatusDashboard({ initialStatusData = {} }) {
     return () => clearInterval(intervalId);
   }, []);
 
-  // setInterval 대신 재귀 setTimeout을 써서, 수동 새로고침(refreshNonce 증가)이
-  // 눌리면 기존 예약을 깔끔히 취소하고 바로 새 주기를 시작할 수 있게 한다.
+  // 재귀 setTimeout으로 REFRESH_INTERVAL_MS마다 우리 백엔드에 다시 물어본다.
+  // 백엔드는 이제 매번 SMU에 라이브로 접속하지 않고 10초 주기 캐시를 즉시
+  // 돌려주므로, 이 요청은 가볍다 — 그래서 예전엔 있던 "지금 새로고침" 수동
+  // 트리거 버튼은 없앴다(더 이상 누른다고 더 최신 정보가 나오지 않는다).
   useEffect(() => {
     let timeoutId;
     let cancelled = false;
@@ -82,21 +83,21 @@ function StatusDashboard({ initialStatusData = {} }) {
         return axios
           .get(`${URL_ROOT}${siteInfo.endpoint}`, { timeout: REQUEST_TIMEOUT_MS })
           .then((response) => {
-            const { status, message, responseTime, error: backendError } = response.data;
-            const entry = computeDisplayStatus(siteInfo.title, { status, message, responseTime, backendError });
+            const { status, message, responseTime, checkedAt } = response.data;
+            const entry = computeDisplayStatus(siteInfo.title, { status, message, responseTime, checkedAt });
             setStatusData((prevData) => ({ ...prevData, [siteInfo.endpoint]: entry }));
           })
           .catch((error) => {
-            let statusMsg = '상태 점검 실패';
+            let statusMsg = text.dashboard.fetchFailStatus;
             let statusColor = '#d9534f'; // red
-            let responseTime = '점검 실패';
+            let responseTime = text.dashboard.fetchFailResponseTime;
 
             if (error.response && error.response.status === 429) {
-              statusMsg = '잠시 후 시도';
+              statusMsg = text.dashboard.rateLimitedStatus;
               responseTime = 'N/A';
               setRateLimited(true);
             } else if (error.code === 'ECONNABORTED') {
-              statusMsg = '매우 느림(비정상)';
+              statusMsg = text.dashboard.timeoutStatus;
               responseTime = 'N/A';
             }
 
@@ -104,7 +105,7 @@ function StatusDashboard({ initialStatusData = {} }) {
 
             setStatusData((prevData) => ({
               ...prevData,
-              [siteInfo.endpoint]: { statusMsg, statusColor, responseTime, detail },
+              [siteInfo.endpoint]: { statusMsg, statusColor, responseTime, checkedAt: null, detail },
             }));
           });
       });
@@ -114,7 +115,6 @@ function StatusDashboard({ initialStatusData = {} }) {
       setIsDelayed(false);
 
       if (cancelled) return;
-      setNextRefreshAt(Date.now() + REFRESH_INTERVAL_MS);
       timeoutId = setTimeout(runCycle, REFRESH_INTERVAL_MS);
     };
 
@@ -125,7 +125,7 @@ function StatusDashboard({ initialStatusData = {} }) {
       clearTimeout(timeoutId);
       clearTimeout(delayTimerRef.current);
     };
-  }, [siteInfos, refreshNonce]);
+  }, [siteInfos]);
 
   useEffect(() => {
     if (!loggedIn) {
@@ -187,30 +187,38 @@ function StatusDashboard({ initialStatusData = {} }) {
     return arr;
   }, [siteInfos, pins, clickCounts, sortMode]);
 
-  const secondsUntilRefresh = Math.max(0, Math.round((nextRefreshAt - now) / 1000));
+  // 배지에 보여줄 "서버 캐시가 몇 초 전 것인지" — 사이트별 checkedAt 중
+  // 가장 최근 값을 기준으로 한다(6개가 거의 같은 주기에 갱신되므로).
+  const latestCheckedAtMs = useMemo(() => {
+    const timestamps = Object.values(statusData)
+      .map((entry) => (entry?.checkedAt ? new Date(entry.checkedAt).getTime() : null))
+      .filter((ms) => typeof ms === 'number' && !Number.isNaN(ms));
+    return timestamps.length ? Math.max(...timestamps) : null;
+  }, [statusData]);
+
+  const cacheAgeSeconds =
+    latestCheckedAtMs != null ? Math.max(0, Math.round((now - latestCheckedAtMs) / 1000)) : null;
 
   return (
     <div>
       <div className="sticky top-16 z-20 mb-4 flex flex-col items-end gap-1 bg-slate-50 py-2">
-        <div className="flex items-center gap-1 rounded-full bg-slate-100 p-1 text-sm">
+        <div className="flex items-center gap-3 text-sm">
           <button
             type="button"
             onClick={() => setSortMode('name')}
-            className={`rounded-full px-3 py-1 transition ${sortMode === 'name' ? 'bg-white font-medium text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            className={sortMode === 'name' ? 'font-semibold text-slate-900 underline underline-offset-4' : 'text-slate-500 hover:text-slate-700'}
           >
-            이름순
+            {text.dashboard.sortName}
           </button>
           <button
             type="button"
             onClick={() => setSortMode('views')}
-            className={`rounded-full px-3 py-1 transition ${sortMode === 'views' ? 'bg-white font-medium text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            className={sortMode === 'views' ? 'font-semibold text-slate-900 underline underline-offset-4' : 'text-slate-500 hover:text-slate-700'}
           >
-            조회수순
+            {text.dashboard.sortViews}
           </button>
         </div>
-        {sortMode === 'views' && (
-          <p className="text-xs text-slate-400">모든 방문자가 링크를 클릭한 횟수 기준이에요</p>
-        )}
+        {sortMode === 'views' && <p className="text-xs text-slate-400">{text.dashboard.sortViewsHint}</p>}
       </div>
 
       <div className="flex flex-col gap-4">
@@ -220,9 +228,9 @@ function StatusDashboard({ initialStatusData = {} }) {
             title={siteInfo.title}
             url={siteInfo.url}
             href={siteInfo.url}
-            statusMsg={statusData[siteInfo.endpoint]?.statusMsg || (isDelayed ? '확인 지연(서버 기동 중...)' : '서버 확인 중...')}
+            statusMsg={statusData[siteInfo.endpoint]?.statusMsg || (isDelayed ? text.dashboard.delayedStatus : text.dashboard.checkingStatus)}
             statusColor={statusData[siteInfo.endpoint]?.statusColor || '#f0ad4e'}
-            responseTime={statusData[siteInfo.endpoint]?.responseTime || (isDelayed ? '잠시만 기다려주세요' : '응답 확인 중...')}
+            responseTime={statusData[siteInfo.endpoint]?.responseTime || (isDelayed ? text.dashboard.delayedResponseTime : text.dashboard.checkingResponseTime)}
             detail={statusData[siteInfo.endpoint]?.detail}
             pinned={pins.includes(siteInfo.endpoint)}
             onTogglePin={() => togglePin(siteInfo.endpoint)}
@@ -234,23 +242,15 @@ function StatusDashboard({ initialStatusData = {} }) {
         ))}
       </div>
 
-      <button
-        type="button"
-        onClick={() => setRefreshNonce((n) => n + 1)}
-        className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-30 flex items-center gap-2 rounded-full bg-white px-4 py-2.5 text-sm text-slate-600 shadow-lg ring-1 ring-slate-200 transition hover:bg-slate-50"
+      <div
+        className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-30 border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-500"
+        aria-live="off"
       >
-        <span
-          className="inline-block h-2 w-2 rounded-full bg-[#0E207F]"
-          style={{ opacity: 0.4 + 0.6 * (1 - secondsUntilRefresh / (REFRESH_INTERVAL_MS / 1000)) }}
-        />
-        {secondsUntilRefresh}초 후 새로고침
-      </button>
+        {cacheAgeSeconds == null ? text.dashboard.cacheChecking : text.dashboard.cacheAgeSuffix(cacheAgeSeconds)}
+      </div>
 
-      <InfoModal open={rateLimited} onClose={() => setRateLimited(false)} title="잠시 후 다시 시도해주세요">
-        <p>
-          이 IP에서 너무 많이 확인해서 요청이 잠깐 제한됐습니다 (분당 20회 제한). SMU
-          서버 문제가 아니라 이 사이트 자체의 보호 장치이고, 1분 뒤 자동으로 풀립니다.
-        </p>
+      <InfoModal open={rateLimited} onClose={() => setRateLimited(false)} title={text.dashboard.rateLimitModalTitle}>
+        <p>{text.dashboard.rateLimitModalBody}</p>
       </InfoModal>
     </div>
   );

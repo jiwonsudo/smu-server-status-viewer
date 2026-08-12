@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import text from '../lib/text';
 
 function DetailModal({ open, onClose, title, statusMsg, statusColor, detail }) {
   const closeButtonRef = useRef(null);
@@ -57,7 +58,7 @@ function DetailModal({ open, onClose, title, statusMsg, statusColor, detail }) {
             ref={closeButtonRef}
             type="button"
             onClick={onClose}
-            aria-label="닫기"
+            aria-label={text.infoModal.close}
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-2xl leading-none text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
           >
             &times;
@@ -67,9 +68,13 @@ function DetailModal({ open, onClose, title, statusMsg, statusColor, detail }) {
         <p className="mt-4 text-sm leading-relaxed text-slate-600">{detail.explanation}</p>
 
         <div className="mt-4 rounded-xl bg-slate-50 p-3">
-          <p className="text-xs font-medium text-slate-400">서버 메시지</p>
-          <p className="mt-1 text-sm text-slate-700">{detail.rawMessage}</p>
-          <p className="mt-1 text-xs text-slate-400">{detail.meta}</p>
+          <p className="text-xs font-medium text-slate-400">{text.detailModal.resultLabel}</p>
+          <p className="mt-1 text-sm text-slate-700">
+            {detail.httpCode ? `HTTP ${detail.httpCode}` : text.detailModal.notConnected} · {detail.reason}
+          </p>
+          {detail.responseTimeMs != null && (
+            <p className="mt-1 text-xs text-slate-400">{text.detailModal.responseTime(detail.responseTimeMs)}</p>
+          )}
         </div>
 
         <button
@@ -77,7 +82,7 @@ function DetailModal({ open, onClose, title, statusMsg, statusColor, detail }) {
           onClick={onClose}
           className="mt-5 w-full rounded-xl bg-slate-100 py-3 text-sm font-medium text-slate-600 transition hover:bg-slate-200 sm:hidden"
         >
-          닫기
+          {text.infoModal.close}
         </button>
       </div>
     </div>,
