@@ -30,7 +30,12 @@ function StatusDashboard({ initialStatusData = {} }) {
   const [sortMode, setSortMode] = useState('name'); // 'name' | 'views'
   const [pins, setPins] = useState([]);
   const [clickCounts, setClickCounts] = useState({}); // 백엔드(Postgres)에 집계된 전체 방문자 클릭 수
-  const [now, setNow] = useState(() => Date.now());
+  // null로 시작한다 — Date.now()를 렌더 중에 바로 부르면 SSR 시점과 클라이언트
+  // 하이드레이션 시점의 값이 달라져서(서버/클라이언트가 물리적으로 다른 순간에
+  // 실행됨) 아래 cacheAgeSeconds 텍스트가 서버 HTML과 클라이언트 첫 렌더에서
+  // 어긋나 하이드레이션 mismatch(React #418)가 났다. null이면 두 쪽 다 항상
+  // "서버 확인 중..."으로 시작해 일치하고, 실제 값은 마운트 후 useEffect에서만 채운다.
+  const [now, setNow] = useState(null);
   const [nextUpdateAtMs, setNextUpdateAtMs] = useState(null);
   const [footerVisible, setFooterVisible] = useState(false);
 
@@ -47,6 +52,7 @@ function StatusDashboard({ initialStatusData = {} }) {
 
   // 우측 하단 "N초 전 확인됨" 배지가 1초마다 갱신되도록 하는 틱 — 새 요청은 안 보낸다.
   useEffect(() => {
+    setNow(Date.now());
     const tick = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(tick);
   }, []);
@@ -164,9 +170,9 @@ function StatusDashboard({ initialStatusData = {} }) {
   }, [statusData]);
 
   const cacheAgeSeconds =
-    latestCheckedAtMs != null ? Math.max(0, Math.round((now - latestCheckedAtMs) / 1000)) : null;
+    now != null && latestCheckedAtMs != null ? Math.max(0, Math.round((now - latestCheckedAtMs) / 1000)) : null;
   const secondsUntilNextUpdate =
-    nextUpdateAtMs != null ? Math.max(0, Math.round((nextUpdateAtMs - now) / 1000)) : null;
+    now != null && nextUpdateAtMs != null ? Math.max(0, Math.round((nextUpdateAtMs - now) / 1000)) : null;
 
   return (
     <div>
