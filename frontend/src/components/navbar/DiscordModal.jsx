@@ -21,7 +21,7 @@ function DiscordModal({ open, onClose }) {
         href={DISCORD_INVITE_URL}
         target="_blank"
         rel="noreferrer"
-        className="mt-4 flex min-h-11 items-center justify-center gap-2 bg-[#5865F2] px-4 text-sm font-semibold text-white transition hover:brightness-110"
+        className="mt-4 flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#5865F2] px-4 text-sm font-semibold text-white transition hover:brightness-110"
       >
         <DiscordIcon className="h-4 w-4" />
         {text.discord.cta}

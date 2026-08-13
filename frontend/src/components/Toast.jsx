@@ -12,7 +12,7 @@ function Toast({ message }) {
     <div
       role="status"
       aria-live="polite"
-      className="fixed left-1/2 top-4 z-[60] max-w-[90vw] -translate-x-1/2 whitespace-nowrap rounded-full bg-slate-900 px-4 py-2 text-sm text-white shadow-lg motion-safe:animate-[toast-in_200ms_ease-out]"
+      className="fixed left-1/2 top-4 z-[60] max-w-[90vw] -translate-x-1/2 whitespace-nowrap rounded-xl bg-slate-900 px-4 py-2 text-sm text-white shadow-lg motion-safe:animate-[toast-in_200ms_ease-out]"
     >
       {message}
     </div>,

@@ -44,7 +44,7 @@ function NavMenu() {
       <button
         type="button"
         onClick={() => setDiscordOpen(true)}
-        className="flex h-9 items-center gap-1.5 rounded-md bg-[#5865F2] px-3 text-sm font-semibold text-white transition hover:brightness-110"
+        className="flex h-9 items-center gap-1.5 rounded-lg bg-[#5865F2] px-3 text-sm font-semibold text-white transition hover:brightness-110"
       >
         <DiscordIcon className="h-4 w-4" />
         {text.nav.discordCta}
@@ -62,7 +62,7 @@ function NavMenu() {
         </button>
 
         {menuOpen && (
-          <div className="absolute right-0 top-full z-50 mt-1 w-52 border border-slate-200 bg-white py-1 shadow-lg">
+          <div className="absolute right-0 top-full z-50 mt-1 w-52 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
             <button
               type="button"
               onClick={() => {

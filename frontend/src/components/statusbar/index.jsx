@@ -14,7 +14,7 @@ const StatusBar = (props) => {
 
   return (
     <div
-      className="border border-slate-200 border-l-4 bg-white p-4"
+      className="rounded-xl border border-slate-100 border-l-4 bg-white p-4 shadow-sm"
       style={{ borderLeftColor: props.statusColor }}
     >
       <div className="flex items-center justify-between gap-3">
@@ -29,7 +29,7 @@ const StatusBar = (props) => {
             aria-pressed={props.pinned}
             aria-label={props.pinned ? text.statusBar.pinRemove : text.statusBar.pinAdd}
             title={props.pinned ? text.statusBar.pinRemove : text.statusBar.pinAdd}
-            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md hover:bg-slate-50 ${pinPulsing ? 'motion-safe:animate-[icon-pop_420ms_ease-in-out]' : ''}`}
+            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg hover:bg-slate-50 ${pinPulsing ? 'motion-safe:animate-[icon-pop_420ms_ease-in-out]' : ''}`}
           >
             <StarIcon filled={props.pinned} className={`h-4 w-4 ${props.pinned ? 'text-amber-400' : 'text-slate-300'}`} />
           </button>
@@ -59,7 +59,7 @@ const StatusBar = (props) => {
           <button
             type="button"
             onClick={() => setModalOpen(true)}
-            className="mt-3 flex min-h-11 w-full items-center justify-center gap-1.5 border border-slate-100 text-sm text-slate-500 hover:border-slate-200 hover:bg-slate-50 hover:text-slate-700"
+            className="mt-3 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-lg border border-slate-100 text-sm text-slate-500 hover:border-slate-200 hover:bg-slate-50 hover:text-slate-700"
           >
             <span aria-hidden="true">ⓘ</span>
             {text.statusBar.detailButton}

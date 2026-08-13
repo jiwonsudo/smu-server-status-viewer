@@ -38,14 +38,14 @@ function ContactForm() {
           onChange={(event) => setName(event.target.value)}
           placeholder={text.contact.namePlaceholder}
           required
-          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-[#0E207F]"
+          className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-[#0E207F]"
         />
         <input
           type="email"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
           placeholder={text.contact.emailPlaceholder}
-          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-[#0E207F]"
+          className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-[#0E207F]"
         />
       </div>
       <textarea
@@ -54,7 +54,7 @@ function ContactForm() {
         placeholder={text.contact.messagePlaceholder}
         required
         rows={4}
-        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-[#0E207F]"
+        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-[#0E207F]"
       />
       <input
         type="text"
@@ -65,7 +65,7 @@ function ContactForm() {
         aria-hidden="true"
         className="hidden"
       />
-      <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+      <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
         <p className="text-xs font-medium text-amber-900">{text.contact.abuseNotice}</p>
         <label className="mt-2 flex items-center gap-2 text-xs font-medium text-amber-900">
           <input
@@ -81,7 +81,7 @@ function ContactForm() {
         <button
           type="submit"
           disabled={status === 'sending' || !name.trim() || !message.trim() || !agreed}
-          className="rounded-lg bg-[#0E207F] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#0a1860] disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-xl bg-[#0E207F] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#0a1860] disabled:cursor-not-allowed disabled:opacity-50"
         >
           {status === 'sending' ? text.contact.sendingLabel : text.contact.sendLabel}
         </button>
