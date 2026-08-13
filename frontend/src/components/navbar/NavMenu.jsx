@@ -5,6 +5,7 @@ import { DiscordIcon, MenuIcon } from '../icons';
 import DiscordModal from './DiscordModal';
 import AboutModal from './AboutModal';
 import FaqModal from './FaqModal';
+import ContactModal from './ContactModal';
 import text from '../../lib/text';
 
 // 소개/FAQ를 여기 드롭다운 하나로 모았다 — 예전엔 nav에 버튼이 3~4개씩
@@ -14,6 +15,7 @@ function NavMenu() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [faqOpen, setFaqOpen] = useState(false);
+  const [contactOpen, setContactOpen] = useState(false);
   const [discordOpen, setDiscordOpen] = useState(false);
   const containerRef = useRef(null);
 
@@ -81,12 +83,23 @@ function NavMenu() {
             >
               {text.nav.faq}
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                setContactOpen(true);
+                setMenuOpen(false);
+              }}
+              className="block w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+            >
+              {text.nav.contact}
+            </button>
           </div>
         )}
       </div>
 
       <AboutModal open={aboutOpen} onClose={() => setAboutOpen(false)} />
       <FaqModal open={faqOpen} onClose={() => setFaqOpen(false)} />
+      <ContactModal open={contactOpen} onClose={() => setContactOpen(false)} />
       <DiscordModal open={discordOpen} onClose={() => setDiscordOpen(false)} />
     </div>
   );

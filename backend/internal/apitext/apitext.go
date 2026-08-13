@@ -60,12 +60,31 @@ func StatusChangeLabel(currentStatus string) string {
 	return StatusDownLabel
 }
 
+// rawStatusLabels translates statuschecker's internal status values ("ok",
+// "error", "timeout" — see statusstore.RecordStatus, which just persists
+// statuschecker.Result.Status verbatim) into Korean for display.
+var rawStatusLabels = map[string]string{
+	"ok":      "정상",
+	"error":   "오류",
+	"timeout": "응답없음",
+}
+
+func rawStatusLabel(status string) string {
+	if label, ok := rawStatusLabels[status]; ok {
+		return label
+	}
+	return UnknownStatusLabel
+}
+
 // StatusChangeDiscordMessage builds the text posted to the Discord status
 // webhook when a monitored service's status actually transitions. siteKey
 // is the short key used in SiteNames (e.g. "ecampus"), not the
 // statuschecker service key (e.g. "ECAMPUS").
 func StatusChangeDiscordMessage(siteKey, previousStatus, currentStatus string) string {
-	return fmt.Sprintf("[SMU 서버상태] %s: %s -> %s (%s)\nhttps://issmuok.site", SiteName(siteKey), previousStatus, currentStatus, StatusChangeLabel(currentStatus))
+	return fmt.Sprintf(
+		"[SMU 서버상태] %s: %s -> %s (%s)\nhttps://issmuok.site",
+		SiteName(siteKey), rawStatusLabel(previousStatus), rawStatusLabel(currentStatus), StatusChangeLabel(currentStatus),
+	)
 }
 
 // ---- 이메일(상태 변화 알림 / 문의) ----
