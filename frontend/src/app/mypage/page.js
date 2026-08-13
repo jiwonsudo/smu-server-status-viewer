@@ -7,12 +7,16 @@ import { useAuth } from '../../lib/AuthContext';
 import { URL_ROOT } from '../../lib/config';
 import { SITE_INFOS } from '../../lib/siteInfos';
 import { BellIcon } from '../../components/icons';
+import { useToast } from '../../lib/useToast';
+import Toast from '../../components/Toast';
 import text from '../../lib/text';
 
 export default function MyPage() {
   const { loggedIn, nickname, loading, notifyConsent, logout, withdraw, loginUrl } = useAuth();
   const [subscriptions, setSubscriptions] = useState([]);
   const [confirmingWithdraw, setConfirmingWithdraw] = useState(false);
+  const [pulsingKey, setPulsingKey] = useState(null);
+  const [toastMessage, showToast] = useToast();
   const router = useRouter();
 
   const handleLogout = () => {
@@ -31,10 +35,12 @@ export default function MyPage() {
       .catch(() => setSubscriptions([]));
   }, [loggedIn]);
 
-  const toggleSubscription = (siteKey) => {
+  const toggleSubscription = (siteKey, siteTitle) => {
     if (!notifyConsent) return;
+    setPulsingKey(siteKey);
     const isSubscribed = subscriptions.includes(siteKey);
     setSubscriptions((prev) => (isSubscribed ? prev.filter((key) => key !== siteKey) : [...prev, siteKey]));
+    showToast(isSubscribed ? text.toast.subscribeOff(siteTitle) : text.toast.subscribeOn(siteTitle));
 
     axios({
       method: isSubscribed ? 'delete' : 'put',
@@ -64,6 +70,8 @@ export default function MyPage() {
 
   return (
     <div className="mx-auto max-w-md">
+      <Toast message={toastMessage} />
+
       <h1 className="text-xl font-semibold text-slate-900">{text.mypage.greeting(nickname)}</h1>
 
       {!notifyConsent && (
@@ -84,14 +92,17 @@ export default function MyPage() {
             <button
               key={site.siteKey}
               type="button"
-              onClick={() => toggleSubscription(site.siteKey)}
+              onClick={() => toggleSubscription(site.siteKey, site.title)}
+              onAnimationEnd={() => setPulsingKey(null)}
               disabled={!notifyConsent}
               className="flex items-center justify-between gap-3 px-3 py-2.5 text-left hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <span className="text-sm text-slate-700">{site.title}</span>
               <BellIcon
                 filled={subscribed}
-                className={`h-4 w-4 shrink-0 ${subscribed ? 'text-[#0E207F]' : 'text-slate-300'}`}
+                className={`h-4 w-4 shrink-0 ${subscribed ? 'text-[#0E207F]' : 'text-slate-300'} ${
+                  pulsingKey === site.siteKey ? 'motion-safe:animate-[icon-pop_420ms_ease-in-out]' : ''
+                }`}
               />
             </button>
           );

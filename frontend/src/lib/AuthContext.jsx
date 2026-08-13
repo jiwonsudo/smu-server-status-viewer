@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import axios from 'axios';
 import { URL_ROOT } from './config';
+import { markLoggedIn, clearKnownUser } from './knownUser';
 
 const AuthContext = createContext(null);
 
@@ -21,6 +22,7 @@ export function AuthProvider({ children }) {
         setNickname(response.data.nickname || null);
         setKakaoConfigured(!!response.data.kakaoConfigured);
         setNotifyConsent(!!response.data.notifyConsent);
+        if (response.data.loggedIn) markLoggedIn();
       })
       .catch(() => {
         setLoggedIn(false);
@@ -40,8 +42,13 @@ export function AuthProvider({ children }) {
   }, [refresh]);
 
   // 로그아웃과 다르게 되돌릴 수 없다 — 카카오 연결까지 끊고 DB의 계정/구독을 전부 지운다.
+  // 탈퇴는 계정을 완전히 지우는 거라, 다음에 로그인하면 진짜 신규 가입과
+  // 같은 상황이 된다 — "이미 겪어본 사람" 표시도 같이 지운다.
   const withdraw = useCallback(() => {
-    return axios.post(`${URL_ROOT}/auth/withdraw`, null, { withCredentials: true }).finally(refresh);
+    return axios.post(`${URL_ROOT}/auth/withdraw`, null, { withCredentials: true }).finally(() => {
+      clearKnownUser();
+      refresh();
+    });
   }, [refresh]);
 
   const loginUrl = `${URL_ROOT}/auth/kakao/login`;

@@ -4,10 +4,12 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import axios from 'axios';
 import StatusBar from './statusbar';
 import InfoModal from './InfoModal';
+import Toast from './Toast';
 import { computeDisplayStatus } from '../lib/statusDetail';
 import { useAuth } from '../lib/AuthContext';
 import { URL_ROOT } from '../lib/config';
 import { SITE_INFOS } from '../lib/siteInfos';
+import { useToast } from '../lib/useToast';
 import text from '../lib/text';
 
 const CLICK_REFRESH_INTERVAL_MS = 60 * 1000; // 조회수는 실시간성이 중요하지 않아 더 느리게
@@ -39,6 +41,7 @@ function StatusDashboard({ initialStatusData = {} }) {
   const { loggedIn, notifyConsent, loginUrl } = useAuth();
   const siteInfos = useMemo(() => SITE_INFOS, []);
   const delayTimerRef = useRef(null);
+  const [toastMessage, showToast] = useToast();
 
   // localStorage는 브라우저 전용이라 마운트 후(useEffect)에만 읽는다 —
   // SSR 시점엔 window가 없고, 서버/클라이언트 첫 렌더 결과가 달라지면
@@ -128,7 +131,7 @@ function StatusDashboard({ initialStatusData = {} }) {
       .catch(() => setSubscriptions([]));
   }, [loggedIn]);
 
-  const toggleSubscription = (siteKey) => {
+  const toggleSubscription = (siteKey, siteTitle) => {
     const isSubscribed = subscriptions.includes(siteKey);
 
     // 구독을 켜려는 시도인데 아직 talk_message(나에게 보내기) 권한이 없으면,
@@ -140,6 +143,7 @@ function StatusDashboard({ initialStatusData = {} }) {
     }
 
     setSubscriptions((prev) => (isSubscribed ? prev.filter((key) => key !== siteKey) : [...prev, siteKey]));
+    showToast(isSubscribed ? text.toast.subscribeOff(siteTitle) : text.toast.subscribeOn(siteTitle));
 
     axios({
       method: isSubscribed ? 'delete' : 'put',
@@ -151,16 +155,20 @@ function StatusDashboard({ initialStatusData = {} }) {
     });
   };
 
-  const togglePin = (endpoint) => {
-    setPins((prev) => {
-      const next = prev.includes(endpoint) ? prev.filter((key) => key !== endpoint) : [...prev, endpoint];
-      try {
-        window.localStorage.setItem(PIN_STORAGE_KEY, JSON.stringify(next));
-      } catch {
-        // localStorage 접근 불가(프라이빗 모드 등)해도 기능은 세션 내에서 그대로 동작
-      }
-      return next;
-    });
+  const togglePin = (endpoint, siteTitle) => {
+    // setPins(prev => ...) 안에서 바깥 변수(willBePinned)를 대입해서 바로
+    // 밑에서 읽으려 했었는데, 그 업데이터 콜백이 이 줄보다 먼저 실행된다는
+    // 보장이 없어서(React가 언제 돌릴지 정해주지 않음) 토스트가 항상 "제거"
+    // 문구로 떴다 — pins는 이미 컴포넌트에 있는 값이니 그냥 직접 읽는다.
+    const isPinned = pins.includes(endpoint);
+    const next = isPinned ? pins.filter((key) => key !== endpoint) : [...pins, endpoint];
+    setPins(next);
+    try {
+      window.localStorage.setItem(PIN_STORAGE_KEY, JSON.stringify(next));
+    } catch {
+      // localStorage 접근 불가(프라이빗 모드 등)해도 기능은 세션 내에서 그대로 동작
+    }
+    showToast(isPinned ? text.toast.pinRemoved(siteTitle) : text.toast.pinAdded(siteTitle));
   };
 
   const recordVisit = (siteKey) => {
@@ -202,6 +210,8 @@ function StatusDashboard({ initialStatusData = {} }) {
 
   return (
     <div>
+      <Toast message={toastMessage} />
+
       <div className="sticky top-16 z-20 mb-4 flex flex-col items-end gap-1 bg-slate-50 py-2">
         <div className="flex items-center gap-3 text-sm">
           <button
@@ -234,11 +244,11 @@ function StatusDashboard({ initialStatusData = {} }) {
             responseTime={statusData[siteInfo.endpoint]?.responseTime || (isDelayed ? text.dashboard.delayedResponseTime : text.dashboard.checkingResponseTime)}
             detail={statusData[siteInfo.endpoint]?.detail}
             pinned={pins.includes(siteInfo.endpoint)}
-            onTogglePin={() => togglePin(siteInfo.endpoint)}
+            onTogglePin={() => togglePin(siteInfo.endpoint, siteInfo.title)}
             onVisit={() => recordVisit(siteInfo.siteKey)}
             loggedIn={loggedIn}
             subscribed={subscriptions.includes(siteInfo.siteKey)}
-            onToggleSubscribe={() => toggleSubscription(siteInfo.siteKey)}
+            onToggleSubscribe={() => toggleSubscription(siteInfo.siteKey, siteInfo.title)}
           />
         ))}
       </div>
@@ -265,7 +275,13 @@ function StatusDashboard({ initialStatusData = {} }) {
         onClose={() => setShowConsentPrompt(false)}
         title={text.kakao.consentPromptTitle}
       >
-        <p>{text.kakao.consentPromptBody}</p>
+        <p>
+          {text.kakao.consentPromptBody.before}
+          <strong className="rounded bg-amber-100 px-0.5 font-semibold text-slate-800">
+            {text.kakao.consentPromptBody.emphasis}
+          </strong>
+          {text.kakao.consentPromptBody.after}
+        </p>
         <a
           href={loginUrl}
           className="mt-4 flex min-h-11 items-center justify-center bg-[#FEE500] px-4 text-sm font-semibold text-[#391B1B] transition hover:brightness-95"

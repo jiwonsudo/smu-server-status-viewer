@@ -491,6 +491,7 @@ func subscribeHandler(userStore *userstore.Store) http.HandlerFunc {
 		if !user.NotifyConsent {
 			// talk_message 동의 없이는 나에게 보내기 자체가 불가능하니, 프론트가
 			// 어떻게 요청하든 서버에서도 한 번 더 막는다 (프론트 체크는 우회 가능하므로).
+			log.Printf("[subscriptions] 유저 %d: notify_consent 없어서 %s 구독 요청 거부(403)", user.KakaoID, site)
 			w.WriteHeader(http.StatusForbidden)
 			return
 		}
@@ -499,6 +500,7 @@ func subscribeHandler(userStore *userstore.Store) http.HandlerFunc {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+		log.Printf("[subscriptions] 유저 %d: %s 구독 성공, 확인 알림 발송 시작", user.KakaoID, site)
 		go notifyUser(userStore, user, apitext.SubscribeConfirm(apitext.SiteName(site)))
 		w.WriteHeader(http.StatusNoContent)
 	}
@@ -541,7 +543,9 @@ func notifyUser(userStore *userstore.Store, user userstore.User, message string)
 
 	if err := kakaoauth.SendToMe(ctx, accessToken, message, "https://issmuok.site"); err != nil {
 		log.Printf("[kakao] 유저 %d 알림 발송 실패: %v", user.KakaoID, err)
+		return
 	}
+	log.Printf("[kakao] 유저 %d 알림 발송 성공", user.KakaoID)
 }
 
 // ---- 문의/건의사항 ----

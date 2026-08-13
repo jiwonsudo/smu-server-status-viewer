@@ -7,6 +7,11 @@ import text from '../../lib/text';
 
 const StatusBar = (props) => {
   const [modalOpen, setModalOpen] = useState(false);
+  // 눌렀을 때 "확실히 눌렸다"는 걸 보여주려고 잠깐 커졌다 흔들리는 이펙트를
+  // 준다. CSS 애니메이션이 끝나는 시점(onAnimationEnd)에 꺼서, setTimeout으로
+  // durartion을 따로 맞출 필요 없이 항상 정확히 애니메이션 길이만큼만 켜져있다.
+  const [pinPulsing, setPinPulsing] = useState(false);
+  const [bellPulsing, setBellPulsing] = useState(false);
 
   return (
     <div
@@ -17,22 +22,30 @@ const StatusBar = (props) => {
         <div className="flex min-w-0 items-center gap-0.5">
           <button
             type="button"
-            onClick={props.onTogglePin}
+            onClick={() => {
+              setPinPulsing(true);
+              props.onTogglePin();
+            }}
+            onAnimationEnd={() => setPinPulsing(false)}
             aria-pressed={props.pinned}
             aria-label={props.pinned ? text.statusBar.pinRemove : text.statusBar.pinAdd}
             title={props.pinned ? text.statusBar.pinRemove : text.statusBar.pinAdd}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md hover:bg-slate-50"
+            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md hover:bg-slate-50 ${pinPulsing ? 'motion-safe:animate-[icon-pop_420ms_ease-in-out]' : ''}`}
           >
             <StarIcon filled={props.pinned} className={`h-4 w-4 ${props.pinned ? 'text-amber-400' : 'text-slate-300'}`} />
           </button>
           {props.loggedIn && (
             <button
               type="button"
-              onClick={props.onToggleSubscribe}
+              onClick={() => {
+                setBellPulsing(true);
+                props.onToggleSubscribe();
+              }}
+              onAnimationEnd={() => setBellPulsing(false)}
               aria-pressed={props.subscribed}
               aria-label={props.subscribed ? text.statusBar.subscribeOff : text.statusBar.subscribeOn}
               title={props.subscribed ? text.statusBar.subscribeOff : text.statusBar.subscribeOn}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md hover:bg-slate-50"
+              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md hover:bg-slate-50 ${bellPulsing ? 'motion-safe:animate-[icon-pop_420ms_ease-in-out]' : ''}`}
             >
               <BellIcon filled={props.subscribed} className={`h-4 w-4 ${props.subscribed ? 'text-[#0E207F]' : 'text-slate-300'}`} />
             </button>
