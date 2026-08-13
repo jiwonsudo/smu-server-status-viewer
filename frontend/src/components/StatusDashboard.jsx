@@ -3,10 +3,8 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import axios from 'axios';
 import StatusBar from './statusbar';
-import InfoModal from './InfoModal';
 import Toast from './Toast';
 import { computeDisplayStatus } from '../lib/statusDetail';
-import { useAuth } from '../lib/AuthContext';
 import { URL_ROOT } from '../lib/config';
 import { SITE_INFOS } from '../lib/siteInfos';
 import { useToast } from '../lib/useToast';
@@ -32,13 +30,10 @@ function StatusDashboard({ initialStatusData = {} }) {
   const [sortMode, setSortMode] = useState('name'); // 'name' | 'views'
   const [pins, setPins] = useState([]);
   const [clickCounts, setClickCounts] = useState({}); // 백엔드(Postgres)에 집계된 전체 방문자 클릭 수
-  const [subscriptions, setSubscriptions] = useState([]); // 카카오 로그인한 유저가 알림 켜둔 사이트
   const [now, setNow] = useState(() => Date.now());
   const [nextUpdateAtMs, setNextUpdateAtMs] = useState(null);
-  const [showConsentPrompt, setShowConsentPrompt] = useState(false);
   const [footerVisible, setFooterVisible] = useState(false);
 
-  const { loggedIn, notifyConsent, loginUrl } = useAuth();
   const siteInfos = useMemo(() => SITE_INFOS, []);
   const delayTimerRef = useRef(null);
   const [toastMessage, showToast] = useToast();
@@ -119,41 +114,6 @@ function StatusDashboard({ initialStatusData = {} }) {
       source.close();
     };
   }, []);
-
-  useEffect(() => {
-    if (!loggedIn) {
-      setSubscriptions([]);
-      return;
-    }
-    axios
-      .get(`${URL_ROOT}/subscriptions`, { withCredentials: true })
-      .then((response) => setSubscriptions(response.data || []))
-      .catch(() => setSubscriptions([]));
-  }, [loggedIn]);
-
-  const toggleSubscription = (siteKey, siteTitle) => {
-    const isSubscribed = subscriptions.includes(siteKey);
-
-    // 구독을 켜려는 시도인데 아직 talk_message(나에게 보내기) 권한이 없으면,
-    // 켠 척만 하고 실제로는 알림이 안 가는 상태를 만들지 않도록 먼저 안내한다.
-    // (서버도 이 권한 없이 온 구독 요청은 403으로 거부하니 이건 이중 방어다.)
-    if (!isSubscribed && !notifyConsent) {
-      setShowConsentPrompt(true);
-      return;
-    }
-
-    setSubscriptions((prev) => (isSubscribed ? prev.filter((key) => key !== siteKey) : [...prev, siteKey]));
-    showToast(isSubscribed ? text.toast.subscribeOff(siteTitle) : text.toast.subscribeOn(siteTitle));
-
-    axios({
-      method: isSubscribed ? 'delete' : 'put',
-      url: `${URL_ROOT}/subscriptions/${siteKey}`,
-      withCredentials: true,
-    }).catch(() => {
-      // 실패하면 낙관적 업데이트를 되돌린다
-      setSubscriptions((prev) => (isSubscribed ? [...prev, siteKey] : prev.filter((key) => key !== siteKey)));
-    });
-  };
 
   const togglePin = (endpoint, siteTitle) => {
     // setPins(prev => ...) 안에서 바깥 변수(willBePinned)를 대입해서 바로
@@ -246,9 +206,6 @@ function StatusDashboard({ initialStatusData = {} }) {
             pinned={pins.includes(siteInfo.endpoint)}
             onTogglePin={() => togglePin(siteInfo.endpoint, siteInfo.title)}
             onVisit={() => recordVisit(siteInfo.siteKey)}
-            loggedIn={loggedIn}
-            subscribed={subscriptions.includes(siteInfo.siteKey)}
-            onToggleSubscribe={() => toggleSubscription(siteInfo.siteKey, siteInfo.title)}
           />
         ))}
       </div>
@@ -269,26 +226,6 @@ function StatusDashboard({ initialStatusData = {} }) {
           </span>
         )}
       </div>
-
-      <InfoModal
-        open={showConsentPrompt}
-        onClose={() => setShowConsentPrompt(false)}
-        title={text.kakao.consentPromptTitle}
-      >
-        <p>
-          {text.kakao.consentPromptBody.before}
-          <strong className="rounded bg-amber-100 px-0.5 font-semibold text-slate-800">
-            {text.kakao.consentPromptBody.emphasis}
-          </strong>
-          {text.kakao.consentPromptBody.after}
-        </p>
-        <a
-          href={loginUrl}
-          className="mt-4 flex min-h-11 items-center justify-center bg-[#FEE500] px-4 text-sm font-semibold text-[#391B1B] transition hover:brightness-95"
-        >
-          {text.kakao.consentPromptCta}
-        </a>
-      </InfoModal>
     </div>
   );
 }

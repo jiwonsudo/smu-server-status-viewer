@@ -12,7 +12,6 @@ export const SITE_INFOS = [
     siteKey: 'ecampus',
   },
   { title: text.sites.sammul.title, url: 'https://smul.smu.ac.kr/', endpoint: '/status/sammul', siteKey: 'sammul' },
-  { title: text.sites.career.title, url: 'https://smcareer.smu.ac.kr/', endpoint: '/status/career', siteKey: 'career' },
   { title: text.sites.cloud.title, url: 'https://cloud.smu.ac.kr/', endpoint: '/status/cloud', siteKey: 'cloud' },
   {
     title: text.sites['dorm-seoul'].title,
@@ -20,4 +19,5 @@ export const SITE_INFOS = [
     endpoint: '/status/dorm-seoul',
     siteKey: 'dorm-seoul',
   },
+  { title: text.sites.sugang.title, url: 'https://sugang.smu.ac.kr', endpoint: '/status/sugang', siteKey: 'sugang' },
 ];

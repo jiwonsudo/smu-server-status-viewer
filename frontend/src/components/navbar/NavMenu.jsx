@@ -1,23 +1,20 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
-import { useAuth } from '../../lib/AuthContext';
-import { MenuIcon } from '../icons';
-import KakaoButton from './KakaoButton';
+import { DiscordIcon, MenuIcon } from '../icons';
+import DiscordModal from './DiscordModal';
 import AboutModal from './AboutModal';
 import FaqModal from './FaqModal';
 import text from '../../lib/text';
 
-// 소개/FAQ/마이페이지/로그아웃을 전부 여기 드롭다운 하나로 모았다 —
-// 예전엔 nav에 버튼이 3~4개씩 나란히 붙어있어서 지저분했고, 로그인 상태를
-// 나타내던 닉네임 칩도 "마이페이지"라는 글자가 어디에도 없어서 찾기
-// 어려웠다. 이제 메뉴 안에 "마이페이지"라고 명시된 링크로 들어간다.
+// 소개/FAQ를 여기 드롭다운 하나로 모았다 — 예전엔 nav에 버튼이 3~4개씩
+// 나란히 붙어있어서 지저분했다. 상태 알림은 더 이상 카카오 로그인이 아니라
+// 디스코드 서버 참여로 받으므로, 계정/로그인 개념 자체가 없다.
 function NavMenu() {
-  const { loggedIn, nickname, loading, logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [faqOpen, setFaqOpen] = useState(false);
+  const [discordOpen, setDiscordOpen] = useState(false);
   const containerRef = useRef(null);
 
   useEffect(() => {
@@ -42,7 +39,14 @@ function NavMenu() {
 
   return (
     <div className="flex items-center gap-1">
-      {!loading && !loggedIn && <KakaoButton />}
+      <button
+        type="button"
+        onClick={() => setDiscordOpen(true)}
+        className="flex h-9 items-center gap-1.5 rounded-md bg-[#5865F2] px-3 text-sm font-semibold text-white transition hover:brightness-110"
+      >
+        <DiscordIcon className="h-4 w-4" />
+        {text.nav.discordCta}
+      </button>
 
       <div className="relative" ref={containerRef}>
         <button
@@ -57,13 +61,6 @@ function NavMenu() {
 
         {menuOpen && (
           <div className="absolute right-0 top-full z-50 mt-1 w-52 border border-slate-200 bg-white py-1 shadow-lg">
-            {loggedIn && (
-              <div className="border-b border-slate-100 px-3 py-2 text-sm font-medium text-slate-800">
-                {nickname}
-                {text.nav.myPageSuffix}
-              </div>
-            )}
-
             <button
               type="button"
               onClick={() => {
@@ -84,35 +81,13 @@ function NavMenu() {
             >
               {text.nav.faq}
             </button>
-
-            {loggedIn && (
-              <>
-                <div className="my-1 border-t border-slate-100" />
-                <Link
-                  href="/mypage"
-                  onClick={() => setMenuOpen(false)}
-                  className="block w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
-                >
-                  {text.nav.myPage}
-                </Link>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    logout();
-                  }}
-                  className="block w-full px-3 py-2 text-left text-sm text-slate-500 hover:bg-slate-50"
-                >
-                  {text.kakao.logoutLabel}
-                </button>
-              </>
-            )}
           </div>
         )}
       </div>
 
       <AboutModal open={aboutOpen} onClose={() => setAboutOpen(false)} />
       <FaqModal open={faqOpen} onClose={() => setFaqOpen(false)} />
+      <DiscordModal open={discordOpen} onClose={() => setDiscordOpen(false)} />
     </div>
   );
 }

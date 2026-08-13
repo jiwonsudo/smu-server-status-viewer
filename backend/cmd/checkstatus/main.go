@@ -11,12 +11,10 @@ import (
 
 	"github.com/joho/godotenv"
 	"smu-server-status-viewer/backend/internal/apitext"
-	"smu-server-status-viewer/backend/internal/db"
-	"smu-server-status-viewer/backend/internal/kakaoauth"
+	"smu-server-status-viewer/backend/internal/discordnotify"
 	"smu-server-status-viewer/backend/internal/mailer"
 	"smu-server-status-viewer/backend/internal/statuschecker"
 	"smu-server-status-viewer/backend/internal/statusstore"
-	"smu-server-status-viewer/backend/internal/userstore"
 )
 
 // monitoredService pairs the statuschecker service key with the shorter
@@ -31,9 +29,9 @@ var monitoredServices = []monitoredService{
 	{"HOME", "home"},
 	{"SAMMUL", "sammul"},
 	{"ECAMPUS", "ecampus"},
-	{"CAREER", "career"},
 	{"CLOUD", "cloud"},
 	{"DORM_SEOUL", "dorm-seoul"},
+	{"SUGANG", "sugang"},
 }
 
 func main() {
@@ -41,17 +39,6 @@ func main() {
 	ctx := context.Background()
 
 	store := statusstore.New("data/status.json")
-
-	conn, err := db.Open(os.Getenv("DATABASE_URL"))
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "[check-status] DB 연결 실패, 카카오 알림 없이 계속합니다: %v\n", err)
-		conn = nil
-	}
-	userStore, err := userstore.New(conn)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "[check-status] 사용자 스토어 준비 실패: %v\n", err)
-		os.Exit(1)
-	}
 
 	anyChanged := false
 
@@ -74,7 +61,7 @@ func main() {
 
 			if change.HadPrevious {
 				mailer.SendStatusChangeEmail(svc.serviceKey, change.PreviousStatus, result.Status)
-				notifyKakaoSubscribers(ctx, userStore, svc.siteKey, svc.serviceKey, change.PreviousStatus, result.Status)
+				notifyDiscord(ctx, svc.siteKey, change.PreviousStatus, result.Status)
 			}
 		}
 	}
@@ -84,40 +71,19 @@ func main() {
 	}
 }
 
-// notifyKakaoSubscribers sends a "나에게 보내기" KakaoTalk message to every
-// user who subscribed to siteKey. Refreshes each user's access token first
-// if it's expired or about to be.
-func notifyKakaoSubscribers(ctx context.Context, userStore *userstore.Store, siteKey, serviceKey, previousStatus, currentStatus string) {
-	if !userStore.Enabled() {
+// notifyDiscord posts a status-change alert to the shared Discord status
+// webhook. Unlike the old per-user Kakao "나에게 보내기" flow this replaces,
+// there's no subscriber list to look up — everyone in the Discord channel
+// gets it, and they mute channels they don't care about on their own.
+func notifyDiscord(ctx context.Context, siteKey, previousStatus, currentStatus string) {
+	if !discordnotify.Configured(siteKey) {
 		return
 	}
 
-	subscribers, err := userStore.SubscribersForSite(ctx, siteKey)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "[kakao] %s 구독자 조회 실패: %v\n", siteKey, err)
+	message := apitext.StatusChangeDiscordMessage(siteKey, previousStatus, currentStatus)
+	if err := discordnotify.Send(ctx, siteKey, message); err != nil {
+		fmt.Fprintf(os.Stderr, "[discord] %s 알림 발송 실패: %v\n", siteKey, err)
 		return
 	}
-	if len(subscribers) == 0 {
-		return
-	}
-
-	message := apitext.StatusChangeKakaoMessage(serviceKey, previousStatus, currentStatus)
-	const linkURL = "https://issmuok.site"
-
-	for _, user := range subscribers {
-		accessToken, err := kakaoauth.EnsureFreshToken(ctx, user.AccessToken, user.RefreshToken, user.ExpiresAt, func(t kakaoauth.TokenResult) error {
-			return userStore.UpdateTokens(ctx, user.KakaoID, t.AccessToken, t.RefreshToken, t.ExpiresAt)
-		})
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "[kakao] 유저 %d 토큰 갱신 실패: %v\n", user.KakaoID, err)
-			continue
-		}
-
-		body, err := kakaoauth.SendToMe(ctx, accessToken, message, linkURL)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "[kakao] 유저 %d 발송 실패: %v\n", user.KakaoID, err)
-			continue
-		}
-		fmt.Printf("[kakao] 유저 %d 발송 성공, 카카오 응답: %s\n", user.KakaoID, body)
-	}
+	fmt.Printf("[discord] %s 알림 발송 성공\n", siteKey)
 }
