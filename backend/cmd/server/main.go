@@ -541,11 +541,12 @@ func notifyUser(userStore *userstore.Store, user userstore.User, message string)
 		return
 	}
 
-	if err := kakaoauth.SendToMe(ctx, accessToken, message, "https://issmuok.site"); err != nil {
+	body, err := kakaoauth.SendToMe(ctx, accessToken, message, "https://issmuok.site")
+	if err != nil {
 		log.Printf("[kakao] 유저 %d 알림 발송 실패: %v", user.KakaoID, err)
 		return
 	}
-	log.Printf("[kakao] 유저 %d 알림 발송 성공", user.KakaoID)
+	log.Printf("[kakao] 유저 %d 알림 발송 성공, 카카오 응답: %s", user.KakaoID, body)
 }
 
 // ---- 문의/건의사항 ----

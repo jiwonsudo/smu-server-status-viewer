@@ -227,7 +227,10 @@ func FetchProfile(ctx context.Context, accessToken string) (KakaoProfile, error)
 }
 
 // SendToMe posts a plain-text "나에게 보내기" message to the given user.
-func SendToMe(ctx context.Context, accessToken, text, linkURL string) error {
+// Returns the raw response body even on success (HTTP 200 with a non-zero
+// result_code in the body is possible) so callers can log exactly what
+// Kakao said instead of just trusting the status code.
+func SendToMe(ctx context.Context, accessToken, text, linkURL string) (string, error) {
 	template := map[string]any{
 		"object_type": "text",
 		"text":        text,
@@ -239,29 +242,29 @@ func SendToMe(ctx context.Context, accessToken, text, linkURL string) error {
 	}
 	templateJSON, err := json.Marshal(template)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	form := url.Values{"template_object": {string(templateJSON)}}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, sendToMeURL, strings.NewReader(form.Encode()))
 	if err != nil {
-		return err
+		return "", err
 	}
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded;charset=utf-8")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer resp.Body.Close()
 
+	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("kakao send-to-me failed (HTTP %d): %s", resp.StatusCode, string(body))
+		return "", fmt.Errorf("kakao send-to-me failed (HTTP %d): %s", resp.StatusCode, string(body))
 	}
-	return nil
+	return string(body), nil
 }
 
 // Unlink는 카카오 쪽 앱 연결 자체를 끊는다("연결 끊기") — 회원 탈퇴 때 우리

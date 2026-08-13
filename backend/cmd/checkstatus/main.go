@@ -113,8 +113,11 @@ func notifyKakaoSubscribers(ctx context.Context, userStore *userstore.Store, sit
 			continue
 		}
 
-		if err := kakaoauth.SendToMe(ctx, accessToken, message, linkURL); err != nil {
+		body, err := kakaoauth.SendToMe(ctx, accessToken, message, linkURL)
+		if err != nil {
 			fmt.Fprintf(os.Stderr, "[kakao] 유저 %d 발송 실패: %v\n", user.KakaoID, err)
+			continue
 		}
+		fmt.Printf("[kakao] 유저 %d 발송 성공, 카카오 응답: %s\n", user.KakaoID, body)
 	}
 }
