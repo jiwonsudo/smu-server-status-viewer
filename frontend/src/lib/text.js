@@ -91,6 +91,7 @@ const text = {
     ],
     emailNote: '이메일은 선택 사항이에요 — 안 남기면 익명으로 전달되고, 남기면 그 주소로 답장드립니다.',
     abuseNotice: '문의 취지에서 벗어난 욕설, 비방, 허위사실 등이 포함된 내용은 관련 법령에 따라 법적 책임을 질 수 있습니다.',
+    abuseAgreeLabel: '확인했습니다',
     namePlaceholder: '이름 (선택)',
     emailPlaceholder: '답장 받을 이메일 (선택)',
     messagePlaceholder: '문의 또는 건의사항을 입력해주세요',

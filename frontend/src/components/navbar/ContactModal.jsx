@@ -14,7 +14,6 @@ function ContactModal({ open, onClose }) {
         ))}
       </ul>
       <p className="mt-2 text-xs text-slate-400">{text.contact.emailNote}</p>
-      <p className="mt-2 text-xs text-slate-400">{text.contact.abuseNotice}</p>
       <div className="mt-4">
         <ContactForm />
       </div>

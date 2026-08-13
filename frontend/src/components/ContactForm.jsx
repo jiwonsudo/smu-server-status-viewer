@@ -11,10 +11,11 @@ function ContactForm() {
   const [message, setMessage] = useState('');
   const [website, setWebsite] = useState(''); // honeypot: 사람 눈엔 안 보이고 봇만 채움
   const [status, setStatus] = useState('idle'); // idle | sending | success | error
+  const [agreed, setAgreed] = useState(false); // 법적 책임 안내 확인 체크 — 이거 없으면 전송 버튼이 비활성
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    if (!message.trim() || status === 'sending') return;
+    if (!message.trim() || !agreed || status === 'sending') return;
 
     setStatus('sending');
     try {
@@ -63,10 +64,20 @@ function ContactForm() {
         aria-hidden="true"
         className="hidden"
       />
+      <p className="text-xs text-slate-400">{text.contact.abuseNotice}</p>
+      <label className="flex items-center gap-2 text-xs text-slate-500">
+        <input
+          type="checkbox"
+          checked={agreed}
+          onChange={(event) => setAgreed(event.target.checked)}
+          className="h-3.5 w-3.5 rounded border-slate-300 text-[#0E207F] focus:ring-[#0E207F]"
+        />
+        {text.contact.abuseAgreeLabel}
+      </label>
       <div className="flex items-center gap-3">
         <button
           type="submit"
-          disabled={status === 'sending' || !message.trim()}
+          disabled={status === 'sending' || !message.trim() || !agreed}
           className="rounded-lg bg-[#0E207F] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#0a1860] disabled:cursor-not-allowed disabled:opacity-50"
         >
           {status === 'sending' ? text.contact.sendingLabel : text.contact.sendLabel}
