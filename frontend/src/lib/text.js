@@ -34,13 +34,6 @@ const text = {
     ],
   },
 
-  ogImage: {
-    alt: '스뮤온 — 상명대 서버 실시간 상태 확인',
-    heading: '스뮤온',
-    subheading: '상명대 서버 실시간 상태 확인',
-    footer: '상명대 서버 접속 안될 때, 여기서 바로 확인하세요!',
-  },
-
   nav: {
     about: '소개',
     faq: 'FAQ',
