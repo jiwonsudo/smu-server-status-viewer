@@ -13,7 +13,7 @@ function ContactModal({ open, onClose }) {
           <li key={reason}>{reason}</li>
         ))}
       </ul>
-      <p className="mt-2 text-xs text-slate-400">{text.contact.emailNote}</p>
+      <p className="mt-2 text-xs text-slate-500">{text.contact.emailNote}</p>
       <div className="mt-4">
         <ContactForm />
       </div>

@@ -5,7 +5,7 @@
 const text = {
   site: {
     name: '스뮤온',
-    tagline: '상명대 서버 실시간 상태 확인',
+    tagline: '상명대 서버상태 확인',
     logoAlt: '스뮤온 로고',
   },
 

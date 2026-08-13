@@ -27,7 +27,7 @@ function DetailModal({ open, onClose, title, statusMsg, statusColor, detail }) {
 
   if (!open || !detail) return null;
 
-  const color = statusColor || (detail.ok ? '#5cb85c' : '#d9534f');
+  const color = statusColor || (detail.ok ? '#15803d' : '#dc2626');
 
   return createPortal(
     <div
@@ -43,7 +43,7 @@ function DetailModal({ open, onClose, title, statusMsg, statusColor, detail }) {
       >
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <p className="truncate text-sm text-slate-400">{title}</p>
+            <p className="truncate text-sm text-slate-500">{title}</p>
             <div className="mt-1 flex items-center gap-2">
               <span
                 className="h-2.5 w-2.5 shrink-0 rounded-full"
@@ -59,7 +59,7 @@ function DetailModal({ open, onClose, title, statusMsg, statusColor, detail }) {
             type="button"
             onClick={onClose}
             aria-label={text.infoModal.close}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-2xl leading-none text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-2xl leading-none text-slate-500 transition hover:bg-slate-100 hover:text-slate-600"
           >
             &times;
           </button>
@@ -68,12 +68,12 @@ function DetailModal({ open, onClose, title, statusMsg, statusColor, detail }) {
         <p className="mt-4 text-sm leading-relaxed text-slate-600">{detail.explanation}</p>
 
         <div className="mt-4 rounded-xl bg-slate-50 p-3">
-          <p className="text-xs font-medium text-slate-400">{text.detailModal.resultLabel}</p>
+          <p className="text-xs font-medium text-slate-500">{text.detailModal.resultLabel}</p>
           <p className="mt-1 text-sm text-slate-700">
             {detail.httpCode ? `HTTP ${detail.httpCode}` : text.detailModal.notConnected} · {detail.reason}
           </p>
           {detail.responseTimeMs != null && (
-            <p className="mt-1 text-xs text-slate-400">{text.detailModal.responseTime(detail.responseTimeMs)}</p>
+            <p className="mt-1 text-xs text-slate-500">{text.detailModal.responseTime(detail.responseTimeMs)}</p>
           )}
         </div>
 

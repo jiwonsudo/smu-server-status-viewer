@@ -70,11 +70,11 @@ export function computeDisplayStatus(siteTitle, { status, message, responseTime,
   // status 문자열을 다시 매칭하지 않고 detail.ok/slow를 기준으로 색을 정한다 —
   // 백엔드가 예상 밖의 값을 보내도(레이트리밋 에러 페이지 등) 항상 detail의
   // 실제 성공/실패 판정을 따르게 해서, 실패인데 초록불이 뜨는 일이 없게 한다.
-  let statusColor = '#5cb85c'; // green
+  let statusColor = '#15803d'; // green
   if (!detail.ok) {
-    statusColor = '#d9534f'; // red
+    statusColor = '#dc2626'; // red
   } else if (detail.slow) {
-    statusColor = '#f0ad4e'; // yellow — 응답은 오지만 느림 (800ms 초과)
+    statusColor = '#b45309'; // yellow — 응답은 오지만 느림 (800ms 초과)
   }
 
   // 카드에는 "정상 서비스 / 비정상(이유)"처럼 사람이 바로 읽는 문구만 보여준다.

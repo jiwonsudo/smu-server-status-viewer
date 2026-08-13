@@ -9,7 +9,7 @@ const Footer = () => {
           {text.footer.privacyLabel}
         </Link>
       </div>
-      <p className="text-xs text-slate-500">{text.footer.copyright}</p>
+      <p className="text-xs text-slate-400">{text.footer.copyright}</p>
     </footer>
   );
 }

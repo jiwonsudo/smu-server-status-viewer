@@ -23,8 +23,13 @@ async function fetchInitialStatusData() {
         const res = await fetch(`${URL_ROOT}${siteInfo.endpoint}`, {
           cache: 'no-store',
           headers: visitorIP ? { 'X-Forwarded-For': visitorIP } : undefined,
+          // 백엔드(Render)가 느리거나 콜드스타트 중이면 이 fetch가 그대로
+          // LCP를 끌고 내려간다(실측 14초까지 봄) — 클라이언트가 하이드레이션
+          // 직후 SSE로 어차피 실시간 데이터를 다시 받아오니, SSR은 짧게
+          // 끊고 실패로 처리해서 로딩 스켈레톤을 먼저 보여주는 게 낫다.
+          signal: AbortSignal.timeout(2500),
         });
-        if (!res.ok) return [siteInfo.endpoint, null]; // 429 등 — 클라이언트 쪽 폴링이 곧 다시 확인한다
+        if (!res.ok) return [siteInfo.endpoint, null]; // 429 등 — 클라이언트 쪽 SSE가 곧 다시 채운다
         const data = await res.json();
         return [siteInfo.endpoint, computeDisplayStatus(siteInfo.title, data)];
       } catch {

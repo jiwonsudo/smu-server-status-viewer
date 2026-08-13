@@ -195,7 +195,7 @@ function StatusDashboard({ initialStatusData = {} }) {
             {text.dashboard.sortViews}
           </button>
         </div>
-        {sortMode === 'views' && <p className="text-xs text-slate-400">{text.dashboard.sortViewsHint}</p>}
+        {sortMode === 'views' && <p className="text-xs text-slate-500">{text.dashboard.sortViewsHint}</p>}
       </div>
 
       <div className="flex flex-col gap-4">
@@ -206,7 +206,7 @@ function StatusDashboard({ initialStatusData = {} }) {
             url={siteInfo.url}
             href={siteInfo.url}
             statusMsg={statusData[siteInfo.endpoint]?.statusMsg || (isDelayed ? text.dashboard.delayedStatus : text.dashboard.checkingStatus)}
-            statusColor={statusData[siteInfo.endpoint]?.statusColor || '#f0ad4e'}
+            statusColor={statusData[siteInfo.endpoint]?.statusColor || '#b45309'}
             responseTime={statusData[siteInfo.endpoint]?.responseTime || (isDelayed ? text.dashboard.delayedResponseTime : text.dashboard.checkingResponseTime)}
             detail={statusData[siteInfo.endpoint]?.detail}
             pinned={pins.includes(siteInfo.endpoint)}

@@ -8,7 +8,7 @@ export default function PrivacyPage() {
   return (
     <div className="mx-auto max-w-2xl">
       <h1 className="text-xl font-semibold text-slate-900">{text.privacy.title}</h1>
-      <p className="mt-1 text-xs text-slate-400">{text.privacy.updated}</p>
+      <p className="mt-1 text-xs text-slate-500">{text.privacy.updated}</p>
       <p className="mt-4 text-sm leading-relaxed text-slate-600">{text.privacy.intro}</p>
 
       <div className="mt-6 flex flex-col gap-6">

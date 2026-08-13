@@ -48,7 +48,7 @@ function InfoModal({ open, onClose, title, children }) {
             type="button"
             onClick={onClose}
             aria-label={text.infoModal.close}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-2xl leading-none text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-2xl leading-none text-slate-500 transition hover:bg-slate-100 hover:text-slate-600"
           >
             &times;
           </button>

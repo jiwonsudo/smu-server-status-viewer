@@ -18,19 +18,19 @@ function AboutModal({ open, onClose }) {
       <h3 className="mt-4 font-semibold text-slate-800">{text.about.colorHeading}</h3>
       <ul className="mt-1 space-y-1">
         <li className="flex items-center gap-2">
-          <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-[#5cb85c]" />
+          <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-[#15803d]" />
           {text.about.colorOk}
         </li>
         <li className="flex items-center gap-2">
-          <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-[#f0ad4e]" />
+          <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-[#b45309]" />
           {text.about.colorSlow}
         </li>
         <li className="flex items-center gap-2">
-          <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-[#d9534f]" />
+          <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-[#dc2626]" />
           {text.about.colorDown}
         </li>
       </ul>
-      <p className="mt-1 text-xs text-slate-400">{text.about.detailHint}</p>
+      <p className="mt-1 text-xs text-slate-500">{text.about.detailHint}</p>
 
       <h3 className="mt-4 font-semibold text-slate-800">{text.about.intervalHeading}</h3>
       <p className="mt-1">{text.about.intervalBody}</p>

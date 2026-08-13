@@ -43,14 +43,14 @@ const StatusBar = (props) => {
             >
               {props.title}
             </a>
-            <div className="mt-0.5 truncate text-xs text-slate-400">{props.url}</div>
+            <div className="mt-0.5 truncate text-xs text-slate-500">{props.url}</div>
           </div>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1">
           <span className="text-sm font-medium" style={{ color: props.statusColor }}>
             {props.statusMsg}
           </span>
-          <span className="text-xs text-slate-400">{props.responseTime}</span>
+          <span className="text-xs text-slate-500">{props.responseTime}</span>
         </div>
       </div>
 
