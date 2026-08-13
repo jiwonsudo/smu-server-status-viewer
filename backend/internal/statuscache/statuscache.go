@@ -63,7 +63,10 @@ func (c *Cache) refreshAll(urls map[string]string) {
 		wg.Add(1)
 		go func(key, url string) {
 			defer wg.Done()
-			ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+			// statuschecker의 http.Client 자체 타임아웃(10초)보다 여유를 둬서,
+			// 이 컨텍스트가 먼저 끊어버리는 바람에 실제 타임아웃 사유가
+			// "context deadline exceeded"로 가려지는 일이 없게 한다.
+			ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
 			defer cancel()
 			result := statuschecker.CheckServiceStatus(ctx, url)
 			result.CheckedAt = time.Now()

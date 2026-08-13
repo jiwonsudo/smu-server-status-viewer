@@ -44,8 +44,10 @@ const browserUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/
 
 const maxRedirects = 5
 
+// 상명대 홈페이지가 살아있는데도 실제로 8초 가까이 걸리는 경우가 실측으로
+// 확인돼서, 5초는 느릴 뿐인 정상 사이트를 다운으로 오판하게 만들었다.
 var httpClient = &http.Client{
-	Timeout: 5 * time.Second,
+	Timeout: 10 * time.Second,
 	CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		if len(via) >= maxRedirects {
 			return errors.New("stopped after too many redirects")

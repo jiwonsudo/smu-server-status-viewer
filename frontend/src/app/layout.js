@@ -3,6 +3,7 @@ import { SpeedInsights } from '@vercel/speed-insights/next';
 import Navbar from '../components/navbar';
 import Footer from '../components/footer';
 import text from '../lib/text';
+import fontUrl from '../styles/fonts/PretendardVariable.woff2';
 import './globals.css';
 
 const { title, shareTitle, description, keywords } = text.meta;
@@ -47,6 +48,13 @@ const structuredData = {
 export default function RootLayout({ children }) {
   return (
     <html lang="ko">
+      <head>
+        {/* @font-face(globals.css)는 CSS가 파싱된 후에야 폰트를 발견해서 받기
+            시작한다 — 그 전에 미리 받아두게 하는 힌트. font-display:swap과
+            같이 써도 이게 있으면 실제 폰트가 그만큼 더 일찍 도착해 늦게
+            스왑되며 LCP를 밀어내는 시간이 줄어든다. */}
+        <link rel="preload" href={fontUrl?.src || fontUrl} as="font" type="font/woff2" crossOrigin="anonymous" />
+      </head>
       <body>
         <script
           type="application/ld+json"
