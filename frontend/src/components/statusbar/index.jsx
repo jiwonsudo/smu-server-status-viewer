@@ -14,8 +14,8 @@ const StatusBar = (props) => {
 
   return (
     <div
-      className="rounded-xl border border-slate-100 border-l-4 bg-white p-4 shadow-sm"
-      style={{ borderLeftColor: props.statusColor }}
+      className="rounded-xl border border-slate-100 border-t-4 bg-white p-4 shadow-sm"
+      style={{ borderTopColor: props.statusColor }}
     >
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-0.5">
