@@ -15,7 +15,7 @@ function ContactForm() {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    if (!message.trim() || !agreed || status === 'sending') return;
+    if (!name.trim() || !message.trim() || !agreed || status === 'sending') return;
 
     setStatus('sending');
     try {
@@ -37,6 +37,7 @@ function ContactForm() {
           value={name}
           onChange={(event) => setName(event.target.value)}
           placeholder={text.contact.namePlaceholder}
+          required
           className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-[#0E207F]"
         />
         <input
@@ -79,7 +80,7 @@ function ContactForm() {
       <div className="flex items-center gap-3">
         <button
           type="submit"
-          disabled={status === 'sending' || !message.trim() || !agreed}
+          disabled={status === 'sending' || !name.trim() || !message.trim() || !agreed}
           className="rounded-lg bg-[#0E207F] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#0a1860] disabled:cursor-not-allowed disabled:opacity-50"
         >
           {status === 'sending' ? text.contact.sendingLabel : text.contact.sendLabel}
