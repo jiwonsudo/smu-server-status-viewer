@@ -6,5 +6,11 @@ export default function sitemap() {
       changeFrequency: 'always',
       priority: 1,
     },
+    {
+      url: 'https://issmuok.site/privacy',
+      lastModified: new Date(),
+      changeFrequency: 'monthly',
+      priority: 0.3,
+    },
   ];
 }

@@ -12,6 +12,9 @@ export const metadata = {
   title,
   description,
   keywords,
+  alternates: {
+    canonical: 'https://issmuok.site',
+  },
   openGraph: {
     title,
     description,
@@ -31,10 +34,24 @@ export const metadata = {
   manifest: '/manifest.json',
 };
 
+const structuredData = {
+  '@context': 'https://schema.org',
+  '@type': 'WebSite',
+  name: text.site.name,
+  alternateName: '스뮤야 괜찮아',
+  url: 'https://issmuok.site',
+  description,
+  inLanguage: 'ko-KR',
+};
+
 export default function RootLayout({ children }) {
   return (
     <html lang="ko">
       <body>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+        />
         <div className="flex min-h-screen flex-col bg-slate-50">
           <Navbar />
           <main className="flex-1 px-4 py-10">{children}</main>
