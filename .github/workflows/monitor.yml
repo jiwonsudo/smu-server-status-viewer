@@ -32,11 +32,8 @@ jobs:
       - name: Run status check
         working-directory: backend
         env:
-          SMTP_HOST: ${{ secrets.SMTP_HOST }}
-          SMTP_PORT: ${{ secrets.SMTP_PORT }}
-          SMTP_USER: ${{ secrets.SMTP_USER }}
-          SMTP_PASS: ${{ secrets.SMTP_PASS }}
-          SMTP_FROM: ${{ secrets.SMTP_FROM }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          RESEND_FROM: ${{ secrets.RESEND_FROM }}
           ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
           DISCORD_WEBHOOK_HOME: ${{ secrets.DISCORD_WEBHOOK_HOME }}
           DISCORD_WEBHOOK_ECAMPUS: ${{ secrets.DISCORD_WEBHOOK_ECAMPUS }}
