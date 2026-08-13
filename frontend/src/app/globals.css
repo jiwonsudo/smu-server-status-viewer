@@ -5,7 +5,7 @@
 	font-weight: 45 920;
 	font-style: normal;
 	font-display: swap;
-	src: url('../styles/fonts/PretendardVariable.woff2'), url('../styles/fonts/PretendardVariable.ttf') format('woff2-variations');
+	src: url('../styles/fonts/PretendardVariable.woff2') format('woff2-variations');
 }
 
 body {
