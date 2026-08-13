@@ -64,16 +64,18 @@ function ContactForm() {
         aria-hidden="true"
         className="hidden"
       />
-      <p className="text-xs text-slate-400">{text.contact.abuseNotice}</p>
-      <label className="flex items-center gap-2 text-xs text-slate-500">
-        <input
-          type="checkbox"
-          checked={agreed}
-          onChange={(event) => setAgreed(event.target.checked)}
-          className="h-3.5 w-3.5 rounded border-slate-300 text-[#0E207F] focus:ring-[#0E207F]"
-        />
-        {text.contact.abuseAgreeLabel}
-      </label>
+      <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+        <p className="text-xs font-medium text-amber-900">{text.contact.abuseNotice}</p>
+        <label className="mt-2 flex items-center gap-2 text-xs font-medium text-amber-900">
+          <input
+            type="checkbox"
+            checked={agreed}
+            onChange={(event) => setAgreed(event.target.checked)}
+            className="h-3.5 w-3.5 rounded border-amber-400 text-[#0E207F] focus:ring-[#0E207F]"
+          />
+          {text.contact.abuseAgreeLabel}
+        </label>
+      </div>
       <div className="flex items-center gap-3">
         <button
           type="submit"
