@@ -8,17 +8,17 @@ import './globals.css';
 const { title, description, keywords } = text.meta;
 
 export const metadata = {
-  metadataBase: new URL('https://issmuok.site'),
+  metadataBase: new URL('https://www.issmuok.site'),
   title,
   description,
   keywords,
   alternates: {
-    canonical: 'https://issmuok.site',
+    canonical: 'https://www.issmuok.site',
   },
   openGraph: {
     title,
     description,
-    url: 'https://issmuok.site',
+    url: 'https://www.issmuok.site',
     siteName: text.site.name,
     locale: 'ko_KR',
     type: 'website',
@@ -39,7 +39,7 @@ const structuredData = {
   '@type': 'WebSite',
   name: text.site.name,
   alternateName: '스뮤야 괜찮아',
-  url: 'https://issmuok.site',
+  url: 'https://www.issmuok.site',
   description,
   inLanguage: 'ko-KR',
 };

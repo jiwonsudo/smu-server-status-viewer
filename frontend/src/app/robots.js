@@ -4,6 +4,6 @@ export default function robots() {
       userAgent: '*',
       allow: '/',
     },
-    sitemap: 'https://issmuok.site/sitemap.xml',
+    sitemap: 'https://www.issmuok.site/sitemap.xml',
   };
 }

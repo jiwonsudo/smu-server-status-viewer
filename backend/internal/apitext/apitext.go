@@ -82,7 +82,7 @@ func rawStatusLabel(status string) string {
 // statuschecker service key (e.g. "ECAMPUS").
 func StatusChangeDiscordMessage(siteKey, previousStatus, currentStatus string) string {
 	return fmt.Sprintf(
-		"[SMU 서버상태] %s: %s -> %s (%s)\nhttps://issmuok.site",
+		"[SMU 서버상태] %s: %s -> %s (%s)\nhttps://www.issmuok.site",
 		SiteName(siteKey), rawStatusLabel(previousStatus), rawStatusLabel(currentStatus), StatusChangeLabel(currentStatus),
 	)
 }
