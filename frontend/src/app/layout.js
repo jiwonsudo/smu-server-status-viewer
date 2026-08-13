@@ -5,7 +5,7 @@ import Footer from '../components/footer';
 import text from '../lib/text';
 import './globals.css';
 
-const { title, description, keywords } = text.meta;
+const { title, shareTitle, description, keywords } = text.meta;
 
 export const metadata = {
   metadataBase: new URL('https://www.issmuok.site'),
@@ -16,7 +16,7 @@ export const metadata = {
     canonical: 'https://www.issmuok.site',
   },
   openGraph: {
-    title,
+    title: shareTitle,
     description,
     url: 'https://www.issmuok.site',
     siteName: text.site.name,
@@ -25,7 +25,7 @@ export const metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title,
+    title: shareTitle,
     description,
   },
   icons: {
