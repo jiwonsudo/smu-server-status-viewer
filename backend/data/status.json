@@ -6,23 +6,23 @@
   },
   "CLOUD": {
     "status": "ok",
-    "lastCheckedAt": "2026-08-22T17:06:35Z",
+    "lastCheckedAt": "2026-08-22T17:32:22Z",
     "lastChangedAt": "2026-08-11T11:58:21Z"
   },
   "DORM_SEOUL": {
-    "status": "timeout",
-    "lastCheckedAt": "2026-08-22T17:06:45Z",
-    "lastChangedAt": "2026-08-22T17:06:45Z"
+    "status": "ok",
+    "lastCheckedAt": "2026-08-22T17:32:23Z",
+    "lastChangedAt": "2026-08-22T17:32:23Z"
   },
   "ECAMPUS": {
     "status": "ok",
-    "lastCheckedAt": "2026-08-22T17:06:34Z",
+    "lastCheckedAt": "2026-08-22T17:32:21Z",
     "lastChangedAt": "2026-08-18T15:15:55Z"
   },
   "HOME": {
-    "status": "timeout",
-    "lastCheckedAt": "2026-08-22T17:06:30Z",
-    "lastChangedAt": "2026-08-22T17:06:30Z"
+    "status": "ok",
+    "lastCheckedAt": "2026-08-22T17:32:18Z",
+    "lastChangedAt": "2026-08-22T17:32:18Z"
   },
   "LIB_SEOUL": {
     "status": "error",
@@ -31,12 +31,12 @@
   },
   "SAMMUL": {
     "status": "ok",
-    "lastCheckedAt": "2026-08-22T17:06:32Z",
+    "lastCheckedAt": "2026-08-22T17:32:20Z",
     "lastChangedAt": "2026-08-10T08:24:59Z"
   },
   "SUGANG": {
     "status": "ok",
-    "lastCheckedAt": "2026-08-22T17:06:46Z",
+    "lastCheckedAt": "2026-08-22T17:32:25Z",
     "lastChangedAt": "2026-08-13T02:38:52Z"
   }
 }
