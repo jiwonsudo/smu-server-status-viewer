@@ -6,22 +6,22 @@
   },
   "CLOUD": {
     "status": "ok",
-    "lastCheckedAt": "2026-08-22T11:00:40Z",
+    "lastCheckedAt": "2026-08-22T11:26:06Z",
     "lastChangedAt": "2026-08-11T11:58:21Z"
   },
   "DORM_SEOUL": {
     "status": "ok",
-    "lastCheckedAt": "2026-08-22T11:00:41Z",
+    "lastCheckedAt": "2026-08-22T11:26:08Z",
     "lastChangedAt": "2026-08-21T19:15:10Z"
   },
   "ECAMPUS": {
     "status": "ok",
-    "lastCheckedAt": "2026-08-22T11:00:39Z",
+    "lastCheckedAt": "2026-08-22T11:26:04Z",
     "lastChangedAt": "2026-08-18T15:15:55Z"
   },
   "HOME": {
     "status": "ok",
-    "lastCheckedAt": "2026-08-22T11:00:36Z",
+    "lastCheckedAt": "2026-08-22T11:26:01Z",
     "lastChangedAt": "2026-08-21T19:15:04Z"
   },
   "LIB_SEOUL": {
@@ -31,12 +31,12 @@
   },
   "SAMMUL": {
     "status": "ok",
-    "lastCheckedAt": "2026-08-22T11:00:37Z",
+    "lastCheckedAt": "2026-08-22T11:26:02Z",
     "lastChangedAt": "2026-08-10T08:24:59Z"
   },
   "SUGANG": {
     "status": "ok",
-    "lastCheckedAt": "2026-08-22T11:00:43Z",
+    "lastCheckedAt": "2026-08-22T11:26:09Z",
     "lastChangedAt": "2026-08-13T02:38:52Z"
   }
 }
