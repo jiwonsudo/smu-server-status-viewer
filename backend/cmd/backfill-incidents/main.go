@@ -48,7 +48,26 @@ type reconstructed struct {
 func main() {
 	commit := flag.Bool("commit", false, "insert rows (default: dry run)")
 	analyze := flag.Bool("analyze", false, "also generate embedding + LLM verdict for each")
+	only := flag.String("only", "", "comma-separated service keys to keep (e.g. ECAMPUS,SUGANG); empty = all")
+	after := flag.String("after", "", "drop incidents that started before this date (YYYY-MM-DD); the 5s-timeout era before 2026-08-13 is unreliable")
 	flag.Parse()
+
+	var afterT time.Time
+	if *after != "" {
+		var err error
+		afterT, err = time.Parse("2006-01-02", *after)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "-after 형식 오류: %v\n", err)
+			os.Exit(1)
+		}
+	}
+
+	keep := map[string]bool{}
+	for _, k := range strings.Split(*only, ",") {
+		if k = strings.TrimSpace(k); k != "" {
+			keep[k] = true
+		}
+	}
 
 	_ = godotenv.Load()
 
@@ -58,6 +77,19 @@ func main() {
 	}
 
 	incidents := reconstruct()
+	{
+		filtered := incidents[:0]
+		for _, in := range incidents {
+			if len(keep) > 0 && !keep[in.serviceKey] {
+				continue
+			}
+			if !afterT.IsZero() && in.startedAt.Before(afterT) {
+				continue
+			}
+			filtered = append(filtered, in)
+		}
+		incidents = filtered
+	}
 	sort.Slice(incidents, func(i, j int) bool { return incidents[i].startedAt.Before(incidents[j].startedAt) })
 
 	fmt.Printf("재구성된 incident: %d건\n\n", len(incidents))
@@ -87,34 +119,39 @@ func main() {
 	}
 
 	ctx := context.Background()
-	inserted, skipped := 0, 0
+	inserted, existed, analyzed := 0, 0, 0
 	for _, in := range incidents {
-		if exists(ctx, conn, in.serviceKey, in.startedAt) {
-			skipped++
-			continue
-		}
 		tag := academic.ContextTag(in.startedAt)
-		id, err := store.Open(ctx, in.serviceKey, in.siteKey, in.downStatus, tag, in.startedAt)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "  %s open 실패: %v\n", in.serviceKey, err)
-			continue
-		}
-		if in.resolvedAt != nil {
-			if err := store.Resolve(ctx, in.serviceKey, *in.resolvedAt); err != nil {
-				fmt.Fprintf(os.Stderr, "  #%d resolve 실패: %v\n", id, err)
-			}
-		}
-		inserted++
 
-		if *analyze {
+		id, found := findID(ctx, conn, in.serviceKey, in.startedAt)
+		if found {
+			existed++
+		} else {
+			var err error
+			id, err = store.Open(ctx, in.serviceKey, in.siteKey, in.downStatus, tag, in.startedAt)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "  %s open 실패: %v\n", in.serviceKey, err)
+				continue
+			}
+			if in.resolvedAt != nil {
+				if err := store.Resolve(ctx, in.serviceKey, *in.resolvedAt); err != nil {
+					fmt.Fprintf(os.Stderr, "  #%d resolve 실패: %v\n", id, err)
+				}
+			}
+			inserted++
+		}
+
+		// -analyze는 새로 넣은 것 + 아직 verdict 없는 기존 것 모두 처리(재실행 가능).
+		if *analyze && needsVerdict(ctx, conn, id) {
 			if err := analyzeOne(ctx, store, id, in, tag); err != nil {
 				fmt.Fprintf(os.Stderr, "  #%d 분석 실패: %v\n", id, err)
 			} else {
+				analyzed++
 				fmt.Printf("  #%d 분석 완료\n", id)
 			}
 		}
 	}
-	fmt.Printf("\n삽입 %d건, 스킵(이미 존재) %d건\n", inserted, skipped)
+	fmt.Printf("\n삽입 %d건, 기존 %d건, 분석 %d건\n", inserted, existed, analyzed)
 }
 
 // reconstruct walks the git history of statusFile and pairs up each
@@ -216,12 +253,21 @@ func analyzeOne(ctx context.Context, store *incidentstore.Store, id int64, in re
 	return store.SaveVerdict(ctx, id, v.Verdict, v.Confidence, v.ETA, v.Reasoning, incidentai.Model, time.Now())
 }
 
-func exists(ctx context.Context, conn *sql.DB, serviceKey string, startedAt time.Time) bool {
-	var n int
+func findID(ctx context.Context, conn *sql.DB, serviceKey string, startedAt time.Time) (int64, bool) {
+	var id int64
 	err := conn.QueryRowContext(ctx,
-		`SELECT count(*) FROM incidents WHERE service_key = $1 AND started_at = $2`,
-		serviceKey, startedAt).Scan(&n)
-	return err == nil && n > 0
+		`SELECT id FROM incidents WHERE service_key = $1 AND started_at = $2 LIMIT 1`,
+		serviceKey, startedAt).Scan(&id)
+	if err != nil {
+		return 0, false
+	}
+	return id, true
+}
+
+func needsVerdict(ctx context.Context, conn *sql.DB, id int64) bool {
+	var v sql.NullString
+	err := conn.QueryRowContext(ctx, `SELECT verdict FROM incidents WHERE id = $1`, id).Scan(&v)
+	return err == nil && !v.Valid
 }
 
 // --- git helpers ---
