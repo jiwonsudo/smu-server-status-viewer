@@ -32,21 +32,26 @@ type Cache struct {
 	subs   map[chan struct{}]struct{}
 }
 
-// New starts the cache: it fills every key with a real check before
-// returning (so the first requests after boot aren't empty), then keeps
-// refreshing all of them every interval in the background.
+// New starts the cache and returns immediately: the first full check runs
+// in the background goroutine, not inline, so a cold boot serves /healthz
+// and the HTTP server right away instead of hanging for a check cycle.
+// Until that first refresh lands (~1-2s) Get returns ok=false and callers
+// fall back to their "pending" path (statusHandler → 503, SSE → empty
+// snapshot that the first update fills in).
 func New(interval time.Duration, urls map[string]string) *Cache {
 	c := &Cache{
 		interval: interval,
 		results:  make(map[string]statuschecker.Result, len(urls)),
 		subs:     make(map[chan struct{}]struct{}),
 	}
-	c.refreshAll(urls)
 	go c.loop(interval, urls)
 	return c
 }
 
 func (c *Cache) loop(interval time.Duration, urls map[string]string) {
+	c.refreshAll(urls)
+	c.notifySubscribers()
+
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for range ticker.C {

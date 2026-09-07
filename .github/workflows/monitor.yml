@@ -1,56 +1,40 @@
-name: Monitor SMU service status
+name: Backend uptime safety net
+
+# 상태 점검·전환 알림은 이제 상시 가동되는 Go 서버(internal/statemonitor)가
+# statuscache의 15초 갱신에 붙어서 직접 한다. 이 워크플로는 그 서버가 아예
+# 죽었을 때(콜드스타트 실패, 배포 사고 등)를 잡는 2차 안전망일 뿐이다:
+# /healthz가 응답하지 않으면 잡을 실패시키고(→ GitHub이 저장소 소유자에게
+# 실패 메일 발송), DISCORD_WEBHOOK_OPS가 설정돼 있으면 거기에도 알린다.
+#
+# 주 깨우기(keepalive)는 외부 업타임 핑거(cron-job.org 등)가 2분 간격으로
+# 담당한다 — GitHub Actions 예약 크론은 지연·누락이 잦아 keepalive용으로는
+# 신뢰할 수 없기 때문. 그래서 여기 간격도 15분으로 느슨하게 둔다.
 
 on:
   schedule:
-    - cron: '*/5 * * * *'
+    - cron: '*/15 * * * *'
   workflow_dispatch: {}
 
-permissions:
-  contents: write
-
 concurrency:
-  group: monitor-status
+  group: uptime-safety-net
   cancel-in-progress: false
 
 jobs:
-  check:
+  healthcheck:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      # Render 무료 티어는 트래픽이 없으면 서버를 재우는데, 그러면 백엔드가
-      # 10초마다 자체적으로 도는 상태 캐시 갱신도 같이 멈춘다. 여기서 5분마다
-      # 찔러주면(Render의 유휴 판정 15분보다 짧음) 서버가 계속 깨어있는다.
-      - name: Ping backend to keep it awake
-        run: curl -fsS --max-time 20 https://api.issmuok.site/healthz || true
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: backend/go.mod
-          cache-dependency-path: backend/go.sum
-
-      - name: Run status check
-        working-directory: backend
+      - name: Probe backend /healthz
         env:
-          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          RESEND_FROM: ${{ secrets.RESEND_FROM }}
-          ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
-          DISCORD_WEBHOOK_HOME: ${{ secrets.DISCORD_WEBHOOK_HOME }}
-          DISCORD_WEBHOOK_ECAMPUS: ${{ secrets.DISCORD_WEBHOOK_ECAMPUS }}
-          DISCORD_WEBHOOK_SAMMUL: ${{ secrets.DISCORD_WEBHOOK_SAMMUL }}
-          DISCORD_WEBHOOK_CLOUD: ${{ secrets.DISCORD_WEBHOOK_CLOUD }}
-          DISCORD_WEBHOOK_DORM_SEOUL: ${{ secrets.DISCORD_WEBHOOK_DORM_SEOUL }}
-          DISCORD_WEBHOOK_SUGANG: ${{ secrets.DISCORD_WEBHOOK_SUGANG }}
-        run: go run ./cmd/checkstatus
-
-      - name: Commit status change (if any)
+          OPS_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_OPS }}
         run: |
-          if git diff --quiet -- backend/data/status.json; then
-            echo "No status change, skipping commit."
+          if curl -fsS --max-time 25 https://api.issmuok.site/healthz; then
+            echo "backend up"
             exit 0
           fi
-          git config user.name "smu-server-status-viewer-bot"
-          git config user.email "actions@users.noreply.github.com"
-          git add backend/data/status.json
-          git commit -m "chore: record status change [skip ci]"
-          git push
+          echo "::error::backend /healthz did not respond"
+          if [ -n "$OPS_WEBHOOK" ]; then
+            curl -fsS -X POST -H 'Content-Type: application/json' \
+              -d '{"content":"[SMUON] ⚠️ 백엔드 /healthz 무응답 — 서버 다운 의심 (api.issmuok.site)"}' \
+              "$OPS_WEBHOOK" || true
+          fi
+          exit 1

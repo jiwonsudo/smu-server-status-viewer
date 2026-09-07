@@ -45,11 +45,10 @@ const (
 	RateLimited           = "이 IP에서 너무 많은 요청을 보냈습니다. 잠시 후 다시 시도해주세요."
 )
 
-// ---- checkstatus: 상태 변화 감지 시 디스코드/이메일 알림 ----
+// ---- statemonitor: 상태 전환 확정 시 디스코드/이메일 알림 ----
 const (
 	StatusRecoveredLabel = "복구됨"
 	StatusDownLabel      = "다운됨"
-	FirstRecordLabel     = "(최초 기록)"
 	UnknownStatusLabel   = "알수없음"
 )
 
@@ -61,8 +60,8 @@ func StatusChangeLabel(currentStatus string) string {
 }
 
 // rawStatusLabels translates statuschecker's internal status values ("ok",
-// "error", "timeout" — see statusstore.RecordStatus, which just persists
-// statuschecker.Result.Status verbatim) into Korean for display.
+// "error", "timeout" — persisted verbatim by servicestate) into Korean for
+// display.
 var rawStatusLabels = map[string]string{
 	"ok":      "정상",
 	"error":   "오류",

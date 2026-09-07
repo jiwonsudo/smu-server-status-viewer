@@ -6,7 +6,49 @@
 - 예전 두 레포의 로컬 작업 사본은 `frontend.old-standalone-repo/`, `backend.old-standalone-repo/`로 이름만 바꿔서 백업 보존 중(`.gitignore`에 추가해서 새 모노레포엔 안 들어감). 배포 전환 확인되면 삭제해도 됨.
 - 기존 GitHub 레포 2개(`SMU-Server-Status-Viewer`, `SMU-Server-Status-Viewer-BE`)는 아직 그대로 살아있음. **삭제하지 말고 Archive 권장** — 새 모노레포로 배포 전환 확인 후에.
 
-## 모니터링 아키텍처 변경 (핵심)
+## 2026-09-07 업데이트 — 콜드스타트 해결 + 모니터링을 서버로 재통합
+
+콜드스타트 증상(방문 시 5초간 "서버 확인 중")을 잡으면서, GitHub Actions 기반
+모니터링과 Go 서버의 상태 점검이 중복되던 걸 정리함.
+
+- **콜드스타트 (원인 1: 백엔드가 안 깨어있음)**: `.github/workflows/monitor.yml`의
+  5분 크론이 keepalive였는데 Actions 예약 크론이 자주 밀림/누락됨 → Render 15분
+  유휴 초과 → 콜드스타트. **해결: 외부 업타임 핑거(cron-job.org)를 2분 간격으로
+  `/healthz`에 등록** (사용자가 직접). 실패 알림 ON.
+- **콜드스타트 (원인 2: 프론트에 폴백 데이터 없음)**: `StatusDashboardServer.js`가
+  `headers()`(요청 시점 API) + `cache: 'no-store'`라 SSR fetch가 매번 라이브
+  백엔드를 기다렸음. **해결: `headers()`/방문자 IP 전달 제거 + `next: { revalidate: 15 }`**
+  → `/`가 static ISR로 프리렌더됨(빌드 로그 `○ (Static) Revalidate 15s` 확인).
+  Vercel이 캐시를 즉시 서빙하고 갱신은 백그라운드(SWR). 콜드 백엔드가 첫 페인트를
+  못 막음. 클라이언트는 하이드레이션 직후 SSE로 라이브 승격.
+- **콜드스타트 (원인 3)**: `statuscache.New`가 첫 `refreshAll`를 동기로 끝낸 뒤
+  `ListenAndServe`로 넘어가서 콜드부팅 중 `/healthz`도 몇 초 멈췄음. **해결: 첫 갱신을
+  goroutine으로** — 서버 즉시 기동, 첫 결과 전까지 `Get`이 `ok=false`(기존 503/빈
+  스냅샷 폴백 그대로).
+- **모니터링 재통합**: 상태 전환 감지 + 이메일/디스코드 알림이 `cmd/checkstatus`
+  (Actions에서 5분마다 `go run`)에 있었는데, 서버가 상시 가동되면 중복임. →
+  `internal/statemonitor`로 이관: `statuscache`의 15초 갱신을 구독해서 전환을 감지하고
+  알림을 보냄. **디바운스**: 15초는 순간 blip을 잡을 만큼 짧아서, 새 상태가 연속
+  2회(=`defaultConfirmations`, ~30초) 유지돼야 "전환"으로 확정 → 알림. (이 confirmed/
+  pending 분리가 나중에 붙일 "일시적 vs 지속적" incident 분석의 1차 필터이기도 함.)
+- **상태 지속**: `data/status.json`(git 추적) → `internal/servicestate`의 Postgres
+  `service_status` 테이블. Render 무료는 영구 디스크가 없어서 파일은 재시작 시 사라짐.
+  `DATABASE_URL` 없으면 기존 no-op 패턴대로 메모리로만 유지(재시작 시 기준선 초기화 →
+  재시작 직후 첫 전환 1회는 "최초 기록"으로 알림 생략). 기존 이력은 마이그레이션 안
+  하고 "지금부터 쌓기"(git 커밋 히스토리는 리포에 그대로 남아 조회 가능).
+- **삭제**: `backend/cmd/checkstatus/`, `backend/internal/statusstore/`,
+  `backend/data/status.json`.
+- **`monitor.yml` 축소**: `go run` 제거, 15분 크론으로 `/healthz`만 확인하는 2차
+  안전망. 무응답 시 잡 실패(→ GitHub이 소유자에게 메일) + `DISCORD_WEBHOOK_OPS`
+  설정 시 거기에도 알림.
+- **⚠️ 시크릿 이동**: `RESEND_*`, `ALERT_EMAIL_TO`, `DISCORD_WEBHOOK_*`는 이제 GitHub
+  Actions Secrets가 아니라 **Render 환경변수**에 있어야 알림이 나감. (RESEND_*는
+  문의 폼 때문에 이미 있을 것. Discord 웹훅 6개가 신규 이동 대상.)
+- **⚠️ 알림 신뢰성이 서버 가동에 종속됨**: 예전 Actions는 독립적이라 서버가 죽어도
+  알림은 갔음. 이제 서버가 자면 알림도 침묵 → 외부 핑거(2분)가 생명줄. 750h/월
+  한도도 확인 필요(상시 1개면 ~730h로 빠듯).
+
+## 모니터링 아키텍처 변경 (핵심, 2026-08 — 아래 일부는 위 2026-09-07 업데이트로 대체됨)
 
 기존엔 Express 서버 안에서 `node-cron`으로 5분마다 자체 점검했는데, Render 무료 티어는 트래픽 없으면 프로세스가 잠들어서 그 안의 cron도 같이 멈추는 문제가 있었음(카톡 알림 자동화를 얹어도 서버가 자고 있으면 못 감지). 그래서 모니터링을 서버에서 완전히 분리함. (아래 "백엔드: Express → Go" 절에서 실제 파일은 Go로 다시 바뀌었지만, 이 분리 구조 자체는 그대로 유지됨.)
 

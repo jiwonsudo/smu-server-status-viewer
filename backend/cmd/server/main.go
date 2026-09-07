@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -16,6 +17,8 @@ import (
 	"smu-server-status-viewer/backend/internal/db"
 	"smu-server-status-viewer/backend/internal/mailer"
 	"smu-server-status-viewer/backend/internal/ratelimit"
+	"smu-server-status-viewer/backend/internal/servicestate"
+	"smu-server-status-viewer/backend/internal/statemonitor"
 	"smu-server-status-viewer/backend/internal/statuscache"
 	"smu-server-status-viewer/backend/internal/statuschecker"
 )
@@ -92,11 +95,27 @@ func main() {
 		log.Println("[clicks] DATABASE_URL이 없어 조회수를 기록하지 않습니다.")
 	}
 
+	// 예전엔 GitHub Actions(cmd/checkstatus)가 5분마다 상태 전환을 감지해
+	// 이메일/디스코드 알림을 보냈다. 서버가 상시 가동되면서(외부 업타임
+	// 핑거) 그 역할을 여기로 옮겼다 — statuscache의 15초 갱신에 붙어서
+	// 30초(2회) 이상 지속되는 전환만 알림을 보낸다.
+	serviceState, err := servicestate.New(conn)
+	if err != nil {
+		log.Fatalf("[statemonitor] 스키마 준비 실패: %v", err)
+	}
+	if !serviceState.Enabled() {
+		log.Println("[statemonitor] DATABASE_URL이 없어 상태 기준선을 메모리로만 유지합니다(재시작 시 초기화).")
+	}
+	monitor := statemonitor.New(statemonitor.Config{Cache: statusCache, State: serviceState})
+	monitor.Start(context.Background())
+
 	mux := http.NewServeMux()
-	// Render 무료 티어는 트래픽이 없으면 프로세스를 재운다 — 그러면 위
-	// statusCache의 백그라운드 갱신도 같이 멈춘다. .github/workflows/
-	// monitor.yml이 5분마다 이 경로를 찔러서(Render의 유휴 판정 기준인
-	// 15분보다 훨씬 짧게) 서버가 계속 깨어있게 만든다.
+	// Render 무료 티어는 트래픽이 없으면 프로세스를 재운다 — 그러면
+	// statusCache의 백그라운드 갱신도, statemonitor의 전환 알림도 같이
+	// 멈춘다. 외부 업타임 핑거(cron-job.org)가 2분마다 이 경로를 찔러
+	// (Render의 유휴 판정 15분보다 훨씬 짧게) 서버를 계속 깨워둔다.
+	// .github/workflows/monitor.yml은 이 핑거가 죽었을 때를 잡는 15분
+	// 간격 2차 안전망일 뿐이다.
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
