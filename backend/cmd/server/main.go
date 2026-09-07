@@ -426,17 +426,20 @@ func corsMiddleware(next http.Handler) http.Handler {
 }
 
 // rateLimitMiddleware applies a per-IP rate limit: statusLimiter (very
-// generous, see where it's constructed) for /status/*, limiter (20/min) for
-// everything else. Client IP is read from X-Forwarded-For since Render sits
-// in front as a reverse proxy (equivalent of Express's
-// `app.set('trust proxy', 1)`) — and since the frontend's SSR fetch now
-// forwards the real visitor IP too (see StatusDashboardServer.js), this
-// actually identifies individual visitors instead of lumping all SSR
-// traffic under one shared IP.
+// generous, see where it's constructed) for the read-only status and
+// incident-analysis routes, limiter (20/min) for everything else. Client
+// IP is read from X-Forwarded-For since Render sits in front as a reverse
+// proxy (equivalent of Express's `app.set('trust proxy', 1)`).
+//
+// /api/incidents/*/analysis is on the generous bucket for the same reason
+// /status/* is: during a real outage many students behind the campus NAT
+// (one shared public IP) open the detail modal at once, and this is a
+// cheap read-only DB query with no LLM cost.
 func rateLimitMiddleware(limiter, statusLimiter *ratelimit.Limiter, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		activeLimiter := limiter
-		if strings.HasPrefix(r.URL.Path, "/status/") {
+		if strings.HasPrefix(r.URL.Path, "/status/") ||
+			(r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/incidents/")) {
 			activeLimiter = statusLimiter
 		}
 		if !activeLimiter.Allow(clientIP(r)) {

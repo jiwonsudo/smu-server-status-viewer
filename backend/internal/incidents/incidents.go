@@ -23,6 +23,12 @@ import (
 	"smu-server-status-viewer/backend/internal/incidentstore"
 )
 
+// analysisDelay is how long an outage must persist before it's worth an
+// embedding + LLM call. Short blips (SMU has a lot of them) still get an
+// incident row for the history, but no verdict — if it recovered this
+// fast it was transient by definition.
+const analysisDelay = 90 * time.Second
+
 type Service struct {
 	store *incidentstore.Store
 }
@@ -46,9 +52,24 @@ func (s *Service) OnDown(ctx context.Context, serviceKey, siteKey, downStatus st
 	}
 	log.Printf("[incidents] %s 장애 기록 #%d (%s, %s)", serviceKey, id, downStatus, tag)
 
-	// Detach: embedding + LLM call can take tens of seconds and must not
-	// block statemonitor's alert goroutine.
-	go s.enrich(id, serviceKey, siteKey, downStatus, tag, startedAt)
+	// Wait out analysisDelay; if the service recovered by then it was a
+	// blip — skip the analysis entirely. Otherwise enrich (embedding + LLM)
+	// off the hot path. A server restart during the wait loses the timer;
+	// the admin reanalyze endpoint covers that rare case.
+	time.AfterFunc(analysisDelay, func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		cur, err := s.store.Get(ctx, id)
+		cancel()
+		if err != nil {
+			log.Printf("[incidents] #%d 지연 분석 확인 실패: %v", id, err)
+			return
+		}
+		if cur == nil || cur.ResolvedAt != nil {
+			log.Printf("[incidents] #%d %s 내 복구 — 분석 생략", id, analysisDelay)
+			return
+		}
+		s.enrich(id, serviceKey, siteKey, downStatus, tag, startedAt)
+	})
 }
 
 // ErrNotFound is returned by Reanalyze for an unknown incident id.
