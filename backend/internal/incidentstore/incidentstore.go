@@ -205,6 +205,44 @@ func (s *Store) Get(ctx context.Context, id int64) (*Incident, error) {
 	return scanIncident(s.db.QueryRowContext(ctx, incidentCols+`WHERE id = $1`, id))
 }
 
+// RecentIncident is a trimmed row for the "최근 안정성" list shown even when
+// the service is currently up.
+type RecentIncident struct {
+	StartedAt       time.Time  `json:"startedAt"`
+	ResolvedAt      *time.Time `json:"resolvedAt,omitempty"`
+	DurationMinutes *int       `json:"durationMinutes,omitempty"`
+	DownStatus      string     `json:"downStatus"`
+	Verdict         string     `json:"verdict,omitempty"`
+}
+
+// Recent returns up to limit most-recent incidents for siteKey, newest first.
+func (s *Store) Recent(ctx context.Context, siteKey string, limit int) ([]RecentIncident, error) {
+	if s.db == nil {
+		return nil, nil
+	}
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT started_at, resolved_at, duration_minutes, down_status, COALESCE(verdict, '')
+		FROM incidents
+		WHERE site_key = $1
+		ORDER BY started_at DESC
+		LIMIT $2
+	`, siteKey, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []RecentIncident
+	for rows.Next() {
+		var r RecentIncident
+		if err := rows.Scan(&r.StartedAt, &r.ResolvedAt, &r.DurationMinutes, &r.DownStatus, &r.Verdict); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
 // Stats computes the historical context for serviceKey relative to now
 // (the moment the current outage started).
 func (s *Store) Stats(ctx context.Context, serviceKey string, now time.Time) (Stats, error) {

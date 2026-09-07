@@ -78,7 +78,7 @@ function DetailModal({ open, onClose, title, statusMsg, statusColor, detail, sit
           )}
         </div>
 
-        {!detail.ok && siteKey && <AiAnalysisSection siteKey={siteKey} />}
+        {siteKey && <AiAnalysisSection siteKey={siteKey} isDown={!detail.ok} />}
 
         <button
           type="button"

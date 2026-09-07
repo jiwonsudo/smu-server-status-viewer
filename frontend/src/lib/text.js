@@ -173,12 +173,14 @@ const text = {
     close: '닫기',
   },
 
-  // 상세 모달 안, 비정상 서비스에 뜨는 "AI가 분석한 과거 패턴" 섹션.
+  // 상세 모달 안 "장애 이력 / AI 분석" 섹션. 모든 서비스에 노출 —
+  // 정상이면 최근 안정성, 비정상이면 진행 중 장애의 AI 판정.
   aiAnalysis: {
-    openButton: 'AI가 분석한 과거 패턴 보기',
-    loading: '과거 이력을 분석하고 있어요...',
-    error: '분석을 불러오지 못했어요. 잠시 후 다시 시도해주세요.',
-    noData: '이 서비스의 기록된 장애 이력이 아직 없어요. 앞으로 장애가 쌓이면 여기서 패턴을 분석해 드려요.',
+    openButtonDown: 'AI가 분석한 과거 패턴 보기',
+    openButtonNormal: '이 서비스 장애 이력 보기',
+    loading: '이력을 불러오고 있어요...',
+    error: '불러오지 못했어요. 잠시 후 다시 시도해주세요.',
+    noData: '기록된 장애가 아직 없어요. (모니터링 시작 이후)',
     pending: 'AI가 이번 장애를 분석하고 있어요. 잠시 후 다시 열어보세요.',
     unavailable: '이번 장애에 대한 분석 결과가 없어요.',
     verdictLabel: {
@@ -188,10 +190,14 @@ const text = {
     },
     confidence: (pct) => `신뢰도 ${pct}%`,
     etaPrefix: '예상: ',
-    historyNote: ({ count, median }) =>
+    stabilityHeading: '최근 안정성',
+    stabilitySummary: ({ count, median }) =>
       median > 0
-        ? `과거 장애 ${count}건 · 복구 시간 중앙값 ${median}분`
-        : `과거 장애 ${count}건`,
+        ? `기록된 장애 ${count}건 · 복구 시간 중앙값 ${median}분`
+        : `기록된 장애 ${count}건`,
+    recentHeading: '최근 장애',
+    recentItem: ({ date, minutes, ongoing }) =>
+      ongoing ? `${date} · 진행 중` : minutes != null ? `${date} · ${minutes}분` : date,
     disclaimer: 'AI가 과거 이력만 보고 추정한 결과라 실제와 다를 수 있어요.',
   },
 

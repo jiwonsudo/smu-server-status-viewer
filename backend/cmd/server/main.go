@@ -278,15 +278,17 @@ func clickListHandler(store *clickstore.Store) http.HandlerFunc {
 
 // ---- 장애 이력 AI 분석 ----
 
-// incidentAnalysisResponse is the payload for the "AI가 분석한 과거 패턴"
-// card. The LLM never runs here — this only reads what the state monitor
-// stored when the outage was confirmed. analysisPending is true while the
-// verdict is still being computed (the first few seconds of an outage).
+// incidentAnalysisResponse feeds the detail modal's "장애 이력 / AI 분석"
+// section — shown for every service, not just ones currently down. The LLM
+// never runs here: this only reads what the state monitor stored when an
+// outage was confirmed. analysisPending is true while the verdict for an
+// ongoing outage is still being computed (the first few seconds).
 type incidentAnalysisResponse struct {
-	HasData         bool                    `json:"hasData"`
-	AnalysisPending bool                    `json:"analysisPending"`
-	Incident        *incidentstore.Incident `json:"incident,omitempty"`
-	History         *incidentstore.Stats    `json:"history,omitempty"`
+	HasData         bool                           `json:"hasData"`
+	AnalysisPending bool                           `json:"analysisPending"`
+	Incident        *incidentstore.Incident        `json:"incident,omitempty"`
+	History         *incidentstore.Stats           `json:"history,omitempty"`
+	Recent          []incidentstore.RecentIncident `json:"recent,omitempty"`
 }
 
 func incidentAnalysisHandler(store *incidentstore.Store) http.HandlerFunc {
@@ -318,8 +320,14 @@ func incidentAnalysisHandler(store *incidentstore.Store) http.HandlerFunc {
 			AnalysisPending: latest.Verdict == "" && time.Since(latest.StartedAt) < 10*time.Minute,
 			Incident:        latest,
 		}
-		if stats, err := store.Stats(r.Context(), latest.ServiceKey, latest.StartedAt); err == nil {
+		// history는 지금까지 기록된 이 서비스의 전체 장애 요약(안정성 표시용).
+		// 진행 중 장애의 "일시적/지속적" 근거 수치는 verdictReasoning에 이미
+		// 박혀 있으므로 여기서 다시 계산하지 않는다.
+		if stats, err := store.Stats(r.Context(), latest.ServiceKey, time.Now()); err == nil {
 			resp.History = &stats
+		}
+		if recent, err := store.Recent(r.Context(), site, 5); err == nil {
+			resp.Recent = recent
 		}
 		json.NewEncoder(w).Encode(resp)
 	}
