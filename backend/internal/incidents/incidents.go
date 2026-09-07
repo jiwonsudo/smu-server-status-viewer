@@ -11,6 +11,7 @@ package incidents
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -48,6 +49,36 @@ func (s *Service) OnDown(ctx context.Context, serviceKey, siteKey, downStatus st
 	// Detach: embedding + LLM call can take tens of seconds and must not
 	// block statemonitor's alert goroutine.
 	go s.enrich(id, serviceKey, siteKey, downStatus, tag, startedAt)
+}
+
+// ErrNotFound is returned by Reanalyze for an unknown incident id.
+var ErrNotFound = errors.New("incident not found")
+
+// Reanalyze re-runs enrichment + AI analysis for one incident, synchronously.
+// Used by the admin endpoint to retry a failed analysis (or to verify the
+// pipeline). Returns the resulting verdict string.
+func (s *Service) Reanalyze(ctx context.Context, id int64) (string, error) {
+	if !s.store.Enabled() {
+		return "", errors.New("incidents disabled (no DATABASE_URL)")
+	}
+	in, err := s.store.Get(ctx, id)
+	if err != nil {
+		return "", err
+	}
+	if in == nil {
+		return "", ErrNotFound
+	}
+	tag := in.ContextTag
+	if tag == "" {
+		tag = academic.ContextTag(in.StartedAt)
+	}
+	s.enrich(id, in.ServiceKey, in.SiteKey, in.DownStatus, tag, in.StartedAt)
+
+	after, err := s.store.Get(ctx, id)
+	if err != nil || after == nil {
+		return "", err
+	}
+	return after.Verdict, nil
 }
 
 // OnRecovered closes the most recent open incident for serviceKey.

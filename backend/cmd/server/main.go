@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -153,6 +154,9 @@ func main() {
 	// 시계가 백엔드 하나뿐이라 어긋날 일 자체가 없다.
 	mux.HandleFunc("GET /status/stream", statusStreamHandler(statusCache))
 	mux.HandleFunc("GET /api/incidents/{site}/analysis", incidentAnalysisHandler(incidentStore))
+	// 관리자용: 실패했거나 확인이 필요한 incident의 AI 분석을 다시 돌린다.
+	// ADMIN_TOKEN이 없으면 라우트 자체가 404처럼 조용히 막힌다.
+	mux.HandleFunc("POST /api/incidents/{id}/reanalyze", incidentReanalyzeHandler(incidentSvc, os.Getenv("ADMIN_TOKEN")))
 	mux.HandleFunc("/contact", contactHandler)
 	mux.HandleFunc("POST /clicks/{site}", clickIncrementHandler(clickStore))
 	mux.HandleFunc("GET /clicks", clickListHandler(clickStore))
@@ -318,6 +322,30 @@ func incidentAnalysisHandler(store *incidentstore.Store) http.HandlerFunc {
 			resp.History = &stats
 		}
 		json.NewEncoder(w).Encode(resp)
+	}
+}
+
+func incidentReanalyzeHandler(svc *incidents.Service, adminToken string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if adminToken == "" || r.Header.Get("X-Admin-Token") != adminToken {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		verdict, err := svc.Reanalyze(r.Context(), id)
+		w.Header().Set("Content-Type", "application/json")
+		if err != nil {
+			log.Printf("[incidents] #%d 재분석 실패: %v", id, err)
+			w.WriteHeader(http.StatusBadGateway)
+			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]string{"verdict": verdict})
 	}
 }
 

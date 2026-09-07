@@ -163,23 +163,14 @@ func (s *Store) SaveVerdict(ctx context.Context, id int64, verdict string, confi
 	return err
 }
 
-// Latest returns the most recent incident for siteKey (open or resolved),
-// or (nil, nil) if none recorded / disabled.
-func (s *Store) Latest(ctx context.Context, siteKey string) (*Incident, error) {
-	if s.db == nil {
-		return nil, nil
-	}
-	row := s.db.QueryRowContext(ctx, `
-		SELECT id, service_key, site_key, started_at, resolved_at, duration_minutes,
-		       down_status, COALESCE(context_tag, ''), COALESCE(summary_text, ''),
-		       COALESCE(verdict, ''), verdict_confidence, COALESCE(verdict_eta, ''),
-		       COALESCE(verdict_reasoning, ''), COALESCE(verdict_model, ''), verdict_at
-		FROM incidents
-		WHERE site_key = $1
-		ORDER BY started_at DESC
-		LIMIT 1
-	`, siteKey)
+const incidentCols = `
+	SELECT id, service_key, site_key, started_at, resolved_at, duration_minutes,
+	       down_status, COALESCE(context_tag, ''), COALESCE(summary_text, ''),
+	       COALESCE(verdict, ''), verdict_confidence, COALESCE(verdict_eta, ''),
+	       COALESCE(verdict_reasoning, ''), COALESCE(verdict_model, ''), verdict_at
+	FROM incidents `
 
+func scanIncident(row interface{ Scan(...any) error }) (*Incident, error) {
 	var in Incident
 	err := row.Scan(
 		&in.ID, &in.ServiceKey, &in.SiteKey, &in.StartedAt, &in.ResolvedAt, &in.DurationMinutes,
@@ -194,6 +185,24 @@ func (s *Store) Latest(ctx context.Context, siteKey string) (*Incident, error) {
 		return nil, err
 	}
 	return &in, nil
+}
+
+// Latest returns the most recent incident for siteKey (open or resolved),
+// or (nil, nil) if none recorded / disabled.
+func (s *Store) Latest(ctx context.Context, siteKey string) (*Incident, error) {
+	if s.db == nil {
+		return nil, nil
+	}
+	return scanIncident(s.db.QueryRowContext(ctx,
+		incidentCols+`WHERE site_key = $1 ORDER BY started_at DESC LIMIT 1`, siteKey))
+}
+
+// Get returns one incident by id, or (nil, nil) if not found / disabled.
+func (s *Store) Get(ctx context.Context, id int64) (*Incident, error) {
+	if s.db == nil {
+		return nil, nil
+	}
+	return scanIncident(s.db.QueryRowContext(ctx, incidentCols+`WHERE id = $1`, id))
 }
 
 // Stats computes the historical context for serviceKey relative to now
