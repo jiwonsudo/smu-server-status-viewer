@@ -189,8 +189,9 @@ const text = {
   // 상세 모달 안 "접속 오류 이력 / 분석" 섹션. 모든 서비스에 노출 —
   // 정상이면 최근 안정성, 오류 상태면 진행 중 문제의 판정.
   aiAnalysis: {
-    openButtonDown: 'AI 분석 보기',
+    openButtonDown: '이번 문제 분석 보기',
     openButtonNormal: '접속 오류 이력 보기',
+    aiBadge: 'AI',
     aiTag: 'AI 추정',
     loading: '이력을 불러오고 있어요...',
     error: '불러오지 못했어요. 잠시 후 다시 시도해주세요.',

@@ -54,9 +54,12 @@ function AiAnalysisSection({ siteKey, isDown }) {
       <button
         type="button"
         onClick={load}
-        className="mt-4 flex min-h-11 w-full items-center justify-center rounded-md border border-border bg-card text-sm font-medium text-foreground transition-colors hover:bg-accent"
+        className="mt-4 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-md border border-border bg-card text-sm font-medium text-foreground transition-colors hover:bg-accent"
       >
         {isDown ? text.aiAnalysis.openButtonDown : text.aiAnalysis.openButtonNormal}
+        <span className="rounded-sm border border-border px-1 py-px text-[10px] font-semibold tracking-wide text-muted-foreground">
+          {text.aiAnalysis.aiBadge}
+        </span>
       </button>
     );
   }
