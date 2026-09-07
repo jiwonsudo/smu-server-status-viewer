@@ -70,7 +70,7 @@ const text = {
     colorSlow: '느림 — 접속은 가능하나 응답 시간이 800ms를 넘는 경우',
     colorDown: '비정상 — 10초 넘게 응답이 없거나 실제 서버 오류가 있는 경우',
     detailHint: "각 카드의 '상세 상태 보기'를 누르면 응답 시간을 비롯한 정보들을 자세히 볼 수 있어요.",
-    aiHeading: '접속 오류 패턴 분석',
+    aiHeading: '접속 오류 패턴 분석 (AI)',
     aiBody:
       "'상세 상태 보기'에는 그 서비스의 최근 접속 오류 이력과 복구까지 걸린 시간이 함께 나와요. 지금 접속이 안 되는 상태라면, 과거에 비슷한 시간대·시기에 있었던 오류 기록을 근거로 이번 문제가 금방 풀릴지 오래갈지를 AI가 추정해서 보여줘요.",
     intervalHeading: '서버 상태 점검 주기',
@@ -78,7 +78,7 @@ const text = {
       '서비스 사이트들의 서버 상태 정보는 15초마다 자동으로 갱신돼요.',
     sortHeading: '즐겨찾기 / 정렬',
     sortBody:
-      '☆을 누르면 자주 확인하는 사이트를 목록 맨 위에 고정할 수 있어요. 즐겨찾기 정보는 현재 브라우저에 저장됩니다. 정렬 기능은 이름순 또는 스뮤온 방문자의 사이트 조회수 순으로 바꿀 수 있습니다.',
+      '☆을 누르면 자주 확인하는 사이트를 목록 맨 위에 고정할 수 있어요(즐겨찾기 정보는 현재 브라우저에 저장됩니다). 목록은 즐겨찾기 → 접속 오류 중인 사이트 → 가나다순으로 자동 정렬돼요.',
   },
 
   contact: {
@@ -154,9 +154,6 @@ const text = {
   },
 
   dashboard: {
-    sortName: '이름순',
-    sortViews: '조회수순',
-    sortViewsHint: '모든 방문자가 링크를 클릭한 횟수 기준이에요',
     delayedStatus: '확인 지연(서버 기동 중...)',
     checkingStatus: '서버 확인 중...',
     delayedResponseTime: '잠시만 기다려주세요',
@@ -186,8 +183,9 @@ const text = {
   // 상세 모달 안 "접속 오류 이력 / 분석" 섹션. 모든 서비스에 노출 —
   // 정상이면 최근 안정성, 오류 상태면 진행 중 문제의 판정.
   aiAnalysis: {
-    openButtonDown: '이번 문제 분석 보기',
+    openButtonDown: 'AI 분석 보기',
     openButtonNormal: '접속 오류 이력 보기',
+    aiTag: 'AI 추정',
     loading: '이력을 불러오고 있어요...',
     error: '불러오지 못했어요. 잠시 후 다시 시도해주세요.',
     noData: '기록된 접속 오류가 아직 없어요. (모니터링 시작 이후)',
@@ -208,7 +206,7 @@ const text = {
     recentHeading: '최근 접속 오류',
     recentItem: ({ date, minutes, ongoing }) =>
       ongoing ? `${date} · 진행 중` : minutes != null ? `${date} · ${minutes}분` : date,
-    disclaimer: '과거 이력만 보고 추정한 값이라 실제와 다를 수 있어요.',
+    disclaimer: 'AI가 과거 이력만 보고 추정한 값이라 실제와 다를 수 있어요.',
   },
 
   // buildStatusDetail(statusDetail.js)에서 쓰는 문구. reason은 카드에도

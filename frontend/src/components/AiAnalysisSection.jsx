@@ -129,13 +129,15 @@ function VerdictBlock({ incident, pending }) {
 
   return (
     <div className="flex flex-col gap-2 rounded-md border border-border bg-muted/40 p-2.5">
+      <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+        <span className="inline-block h-1 w-1 rounded-full bg-muted-foreground/60" />
+        {text.aiAnalysis.aiTag}
+        {confidencePct != null && <span> · {text.aiAnalysis.confidence(confidencePct)}</span>}
+      </div>
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant={VERDICT_VARIANT[verdict] || 'secondary'}>
           {text.aiAnalysis.verdictLabel[verdict] || verdict}
         </Badge>
-        {confidencePct != null && (
-          <span className="text-xs text-muted-foreground">{text.aiAnalysis.confidence(confidencePct)}</span>
-        )}
       </div>
       {incident.verdictEta && (
         <p className="text-sm text-foreground">
