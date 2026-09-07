@@ -209,6 +209,7 @@ function StatusDashboard({ initialStatusData = {} }) {
             statusColor={statusData[siteInfo.endpoint]?.statusColor || '#b45309'}
             responseTime={statusData[siteInfo.endpoint]?.responseTime || (isDelayed ? text.dashboard.delayedResponseTime : text.dashboard.checkingResponseTime)}
             detail={statusData[siteInfo.endpoint]?.detail}
+            siteKey={siteInfo.siteKey}
             pinned={pins.includes(siteInfo.endpoint)}
             onTogglePin={() => togglePin(siteInfo.endpoint, siteInfo.title)}
             onVisit={() => recordVisit(siteInfo.siteKey)}

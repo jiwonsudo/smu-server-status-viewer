@@ -48,6 +48,41 @@
   알림은 갔음. 이제 서버가 자면 알림도 침묵 → 외부 핑거(2분)가 생명줄. 750h/월
   한도도 확인 필요(상시 1개면 ~730h로 빠듯).
 
+## 2026-09-07 — 장애 패턴 AI 분석 (incidents)
+
+포트폴리오용 AI 기능. 확정된 장애를 "일시적 vs 지속적"으로 판정하고 근거를
+자연어로 보여준다. **LLM은 요청 시점이 아니라 장애 확정 시점에만 1회 호출** —
+결과를 `incidents` 행에 저장하고, 엔드포인트/프론트는 저장된 값만 읽는다.
+
+파이프라인 (전부 조용히 degrade — DB/키 없으면 그 부분만 생략):
+1. `statemonitor.OnTransition` → `internal/incidents`
+   - 정상→장애: `incidents` 행 INSERT (started_at, down_status, context_tag).
+     이후 goroutine에서: 요약문 생성 → 임베딩(`internal/embed`) → JSONB 저장
+     → SQL 집계 통계(`incidentstore.Stats`) → LLM 판정(`internal/incidentai`) → 저장
+   - 장애→정상: 해당 서비스의 열린 incident에 resolved_at + duration_minutes UPDATE
+2. `GET /api/incidents/{site}/analysis` — 저장된 최신 incident + verdict + history 반환
+   (`{hasData, analysisPending, incident, history}`). 20/분 리미터, LLM 호출 없음.
+3. 프론트: `DetailModal`에서 비정상 서비스일 때 `AiAnalysisSection` 노출 —
+   버튼 클릭 → 위 엔드포인트 → verdict 카드. 문구는 `text.js`의 `aiAnalysis`.
+
+설계 메모:
+- **provider: OpenAI 하나** — 판정 `gpt-4o-mini` + 임베딩 `text-embedding-3-small`,
+  키 하나(`OPENAI_API_KEY`)로 커버. raw HTTPS POST, SDK 없음(mailer와 동일 스타일).
+  판정은 `response_format: json_object` + 방어적 파싱. 모델은 `incidentai.Model` 상수.
+  (Claude로 되돌리려면 `incidentai.go`의 요청/응답 shape ~30줄만 교체.)
+- **임베딩**: `incidents.embedding`은 `JSONB([]float32)`. 지금 retrieval은 SQL
+  집계(같은 시간대/요일/학사맥락 장애 건수·복구시간 중앙값, 24h 재발). pgvector
+  코사인 검색은 데이터가 ~30건 넘으면 마이그레이션 + 쿼리 변경으로 승격
+  (컬럼만 미리 채워둠).
+- **`context_tag`** (`internal/academic`): 3·9월 첫 10일=개강주, 4·10월/6·12월
+  중순=시험기간, 나머지=평시. 실제 학사일정 아닌 휴리스틱(장애가 이 시기에 몰림).
+- **`duration_minutes`가 정답 레이블로 자동 축적** → 나중에 "판정 vs 실제 결과"
+  정확도 eval 붙일 수 있음 (아직 미구현, 2차).
+- **⚠️ 신규 env (Render)**: `OPENAI_API_KEY` 하나. 없어도 서비스는 정상 — 장애는
+  계속 기록되고 임베딩/판정만 생략됨.
+- 초기 데이터: 백필 없이 "지금부터 쌓기". 첫 몇 건은 history 부족으로 "판단보류"가
+  자주 나올 것(프롬프트가 그렇게 지시).
+
 ## 모니터링 아키텍처 변경 (핵심, 2026-08 — 아래 일부는 위 2026-09-07 업데이트로 대체됨)
 
 기존엔 Express 서버 안에서 `node-cron`으로 5분마다 자체 점검했는데, Render 무료 티어는 트래픽 없으면 프로세스가 잠들어서 그 안의 cron도 같이 멈추는 문제가 있었음(카톡 알림 자동화를 얹어도 서버가 자고 있으면 못 감지). 그래서 모니터링을 서버에서 완전히 분리함. (아래 "백엔드: Express → Go" 절에서 실제 파일은 Go로 다시 바뀌었지만, 이 분리 구조 자체는 그대로 유지됨.)

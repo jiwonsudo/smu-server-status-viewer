@@ -15,6 +15,8 @@ import (
 	"smu-server-status-viewer/backend/internal/apitext"
 	"smu-server-status-viewer/backend/internal/clickstore"
 	"smu-server-status-viewer/backend/internal/db"
+	"smu-server-status-viewer/backend/internal/incidents"
+	"smu-server-status-viewer/backend/internal/incidentstore"
 	"smu-server-status-viewer/backend/internal/mailer"
 	"smu-server-status-viewer/backend/internal/ratelimit"
 	"smu-server-status-viewer/backend/internal/servicestate"
@@ -106,7 +108,30 @@ func main() {
 	if !serviceState.Enabled() {
 		log.Println("[statemonitor] DATABASE_URL이 없어 상태 기준선을 메모리로만 유지합니다(재시작 시 초기화).")
 	}
-	monitor := statemonitor.New(statemonitor.Config{Cache: statusCache, State: serviceState})
+
+	// 장애 이력 + AI 패턴 분석. 상태 전환이 확정되면 incident로 기록하고
+	// (핫패스 밖에서) 임베딩·통계·Claude 판정을 붙인다. DB/키가 없으면
+	// 조용히 비활성.
+	incidentStore, err := incidentstore.New(conn)
+	if err != nil {
+		log.Fatalf("[incidents] 스키마 준비 실패: %v", err)
+	}
+	if !incidentStore.Enabled() {
+		log.Println("[incidents] DATABASE_URL이 없어 장애 이력/AI 분석을 비활성화합니다.")
+	}
+	incidentSvc := incidents.New(incidentStore)
+
+	monitor := statemonitor.New(statemonitor.Config{
+		Cache: statusCache,
+		State: serviceState,
+		OnTransition: func(ctx context.Context, t statemonitor.Transition) {
+			if t.CurrentStatus == "ok" {
+				incidentSvc.OnRecovered(ctx, t.ServiceKey, t.At)
+				return
+			}
+			incidentSvc.OnDown(ctx, t.ServiceKey, t.SiteKey, t.CurrentStatus, t.At)
+		},
+	})
 	monitor.Start(context.Background())
 
 	mux := http.NewServeMux()
@@ -127,6 +152,7 @@ func main() {
 	// 생긴다. 대신 SSE로 캐시가 갱신되는 그 순간 값을 그대로 밀어준다 —
 	// 시계가 백엔드 하나뿐이라 어긋날 일 자체가 없다.
 	mux.HandleFunc("GET /status/stream", statusStreamHandler(statusCache))
+	mux.HandleFunc("GET /api/incidents/{site}/analysis", incidentAnalysisHandler(incidentStore))
 	mux.HandleFunc("/contact", contactHandler)
 	mux.HandleFunc("POST /clicks/{site}", clickIncrementHandler(clickStore))
 	mux.HandleFunc("GET /clicks", clickListHandler(clickStore))
@@ -243,6 +269,55 @@ func clickListHandler(store *clickstore.Store) http.HandlerFunc {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(counts)
+	}
+}
+
+// ---- 장애 이력 AI 분석 ----
+
+// incidentAnalysisResponse is the payload for the "AI가 분석한 과거 패턴"
+// card. The LLM never runs here — this only reads what the state monitor
+// stored when the outage was confirmed. analysisPending is true while the
+// verdict is still being computed (the first few seconds of an outage).
+type incidentAnalysisResponse struct {
+	HasData         bool                    `json:"hasData"`
+	AnalysisPending bool                    `json:"analysisPending"`
+	Incident        *incidentstore.Incident `json:"incident,omitempty"`
+	History         *incidentstore.Stats    `json:"history,omitempty"`
+}
+
+func incidentAnalysisHandler(store *incidentstore.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		site := r.PathValue("site")
+		if !validSiteKeys[site] {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		latest, err := store.Latest(r.Context(), site)
+		if err != nil {
+			log.Printf("[incidents] %s 분석 조회 실패: %v", site, err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		if latest == nil {
+			json.NewEncoder(w).Encode(incidentAnalysisResponse{HasData: false})
+			return
+		}
+
+		// verdict가 비어있고 발생한 지 얼마 안 됐으면 "분석 중"; 오래됐는데도
+		// 비어있으면 분석이 실패했거나 키가 없는 것 — 그 경우 pending을 내리고
+		// 프론트가 verdict 카드를 안 그리게 한다.
+		resp := incidentAnalysisResponse{
+			HasData:         true,
+			AnalysisPending: latest.Verdict == "" && time.Since(latest.StartedAt) < 10*time.Minute,
+			Incident:        latest,
+		}
+		if stats, err := store.Stats(r.Context(), latest.ServiceKey, latest.StartedAt); err == nil {
+			resp.History = &stats
+		}
+		json.NewEncoder(w).Encode(resp)
 	}
 }
 

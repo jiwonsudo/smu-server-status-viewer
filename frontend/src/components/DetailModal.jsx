@@ -3,8 +3,9 @@
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import text from '../lib/text';
+import AiAnalysisSection from './AiAnalysisSection';
 
-function DetailModal({ open, onClose, title, statusMsg, statusColor, detail }) {
+function DetailModal({ open, onClose, title, statusMsg, statusColor, detail, siteKey }) {
   const closeButtonRef = useRef(null);
 
   useEffect(() => {
@@ -76,6 +77,8 @@ function DetailModal({ open, onClose, title, statusMsg, statusColor, detail }) {
             <p className="mt-1 text-xs text-slate-500">{text.detailModal.responseTime(detail.responseTimeMs)}</p>
           )}
         </div>
+
+        {!detail.ok && siteKey && <AiAnalysisSection siteKey={siteKey} />}
 
         <button
           type="button"

@@ -173,6 +173,28 @@ const text = {
     close: '닫기',
   },
 
+  // 상세 모달 안, 비정상 서비스에 뜨는 "AI가 분석한 과거 패턴" 섹션.
+  aiAnalysis: {
+    openButton: 'AI가 분석한 과거 패턴 보기',
+    loading: '과거 이력을 분석하고 있어요...',
+    error: '분석을 불러오지 못했어요. 잠시 후 다시 시도해주세요.',
+    noData: '이 서비스의 기록된 장애 이력이 아직 없어요. 앞으로 장애가 쌓이면 여기서 패턴을 분석해 드려요.',
+    pending: 'AI가 이번 장애를 분석하고 있어요. 잠시 후 다시 열어보세요.',
+    unavailable: '이번 장애에 대한 분석 결과가 없어요.',
+    verdictLabel: {
+      일시적: '일시적 장애일 가능성이 높아요',
+      지속적: '지속적 장애일 가능성이 높아요',
+      판단보류: '아직 판단하기 이른 상태예요',
+    },
+    confidence: (pct) => `신뢰도 ${pct}%`,
+    etaPrefix: '예상: ',
+    historyNote: ({ count, median }) =>
+      median > 0
+        ? `과거 장애 ${count}건 · 복구 시간 중앙값 ${median}분`
+        : `과거 장애 ${count}건`,
+    disclaimer: 'AI가 과거 이력만 보고 추정한 결과라 실제와 다를 수 있어요.',
+  },
+
   // buildStatusDetail(statusDetail.js)에서 쓰는 문구. reason은 카드에도
   // ("비정상 (이유)" 형태로 조립) 그대로 쓰이니 너무 길게 쓰지 않는다.
   statusDetail: {

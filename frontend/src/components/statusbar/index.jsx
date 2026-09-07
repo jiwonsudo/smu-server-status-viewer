@@ -71,6 +71,7 @@ const StatusBar = (props) => {
             statusMsg={props.statusMsg}
             statusColor={props.statusColor}
             detail={props.detail}
+            siteKey={props.siteKey}
           />
         </>
       )}
