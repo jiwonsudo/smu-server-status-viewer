@@ -91,8 +91,9 @@ func SendStatusChangeEmail(serviceName, previousStatus, currentStatus string) {
 
 // SendContactMessage forwards a visitor's 문의/건의사항 form submission.
 // Reuses ALERT_EMAIL_TO since the same person (site owner) receives both
-// status alerts and contact messages.
-func SendContactMessage(name, senderEmail, message string) {
+// status alerts and contact messages. clientIP + profanityHits go in the
+// body for abuse triage; a non-empty profanityHits also flags the subject.
+func SendContactMessage(name, senderEmail, message, clientIP string, profanityHits []string) {
 	to := os.Getenv("ALERT_EMAIL_TO")
 
 	displayName := name
@@ -100,8 +101,11 @@ func SendContactMessage(name, senderEmail, message string) {
 		displayName = apitext.AnonymousSender
 	}
 
-	subject := apitext.ContactEmailSubject(displayName)
-	body := apitext.ContactEmailBody(displayName, orDash(senderEmail), time.Now().Format("2006-01-02 15:04:05"), message)
+	subject := apitext.ContactEmailSubject(displayName, len(profanityHits) > 0)
+	body := apitext.ContactEmailBody(
+		displayName, orDash(senderEmail), clientIP,
+		time.Now().Format("2006-01-02 15:04:05"), message, profanityHits,
+	)
 
 	if err := sendEmail(to, subject, body, senderEmail); err != nil {
 		fmt.Printf("[mailer] 문의 메일 발송 실패: %v\n", err)

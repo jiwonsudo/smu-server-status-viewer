@@ -5,7 +5,10 @@
 // because Go and JS can't share one.
 package apitext
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // ---- 사이트 표시 이름 (알림 문구용) ----
 // 프론트 lib/text.js의 sites 섹션과 같은 이름으로 맞춰둔다.
@@ -101,13 +104,23 @@ func StatusChangeEmailBody(serviceName, previousStatus, currentStatus, timestamp
 const AnonymousSender = "익명"
 const NoEmailProvided = "(입력 안 함)"
 
-func ContactEmailSubject(displayName string) string {
+func ContactEmailSubject(displayName string, flagged bool) string {
+	if flagged {
+		return fmt.Sprintf("[⚠️ 욕설 의심] [SMU 서버상태] 문의/건의사항 - %s", displayName)
+	}
 	return fmt.Sprintf("[SMU 서버상태] 문의/건의사항 - %s", displayName)
 }
 
-func ContactEmailBody(displayName, senderEmail, timestamp, message string) string {
-	return fmt.Sprintf(
-		"보낸 사람: %s\n답장 받을 이메일: %s\n시각: %s\n\n%s",
-		displayName, senderEmail, timestamp, message,
-	)
+func ContactEmailBody(displayName, senderEmail, clientIP, timestamp, message string, profanityHits []string) string {
+	if clientIP == "" {
+		clientIP = "(확인 불가)"
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "보낸 사람: %s\n답장 받을 이메일: %s\n접속 IP: %s\n시각: %s\n",
+		displayName, senderEmail, clientIP, timestamp)
+	if len(profanityHits) > 0 {
+		fmt.Fprintf(&b, "감지된 표현: %s\n", strings.Join(profanityHits, ", "))
+	}
+	fmt.Fprintf(&b, "\n%s", message)
+	return b.String()
 }

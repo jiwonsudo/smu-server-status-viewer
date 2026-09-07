@@ -114,20 +114,24 @@ function StatusDashboard({ initialStatusData = {} }) {
     axios.post(`${URL_ROOT}/clicks/${siteKey}`).catch(() => {});
   };
 
-  // 정렬은 고정 우선순위: 즐겨찾기 → 접속 오류 → 가나다순.
+  // 정렬은 고정 우선순위: 즐겨찾기 → 상태 나쁜 순(오류 → 느림 → 정상) → 가나다순.
+  // 문제가 있는 사이트를 먼저 보게 하는 게 목적.
   const sortedSiteInfos = useMemo(() => {
-    const isErrored = (endpoint) => {
+    const severity = (endpoint) => {
       const detail = statusData[endpoint]?.detail;
-      return Boolean(detail && !detail.ok);
+      if (!detail) return 2; // 아직 확인 중
+      if (!detail.ok) return 0; // 접속 오류
+      if (detail.slow) return 1; // 느림
+      return 2; // 정상
     };
     return [...siteInfos].sort((a, b) => {
       const ap = pins.includes(a.endpoint);
       const bp = pins.includes(b.endpoint);
       if (ap !== bp) return ap ? -1 : 1;
 
-      const ae = isErrored(a.endpoint);
-      const be = isErrored(b.endpoint);
-      if (ae !== be) return ae ? -1 : 1;
+      const sa = severity(a.endpoint);
+      const sb = severity(b.endpoint);
+      if (sa !== sb) return sa - sb;
 
       return a.title.localeCompare(b.title, 'ko');
     });

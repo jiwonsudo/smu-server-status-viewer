@@ -19,6 +19,7 @@ import (
 	"smu-server-status-viewer/backend/internal/incidents"
 	"smu-server-status-viewer/backend/internal/incidentstore"
 	"smu-server-status-viewer/backend/internal/mailer"
+	"smu-server-status-viewer/backend/internal/profanity"
 	"smu-server-status-viewer/backend/internal/ratelimit"
 	"smu-server-status-viewer/backend/internal/servicestate"
 	"smu-server-status-viewer/backend/internal/statemonitor"
@@ -398,7 +399,12 @@ func contactHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	mailer.SendContactMessage(strings.TrimSpace(req.Name), strings.TrimSpace(req.Email), req.Message)
+	name := strings.TrimSpace(req.Name)
+	hits := profanity.Find(req.Message + "\n" + name)
+	if len(hits) > 0 {
+		log.Printf("[contact] 욕설 의심 제출 (IP %s): %v", clientIP(r), hits)
+	}
+	mailer.SendContactMessage(name, strings.TrimSpace(req.Email), req.Message, clientIP(r), hits)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"message": apitext.ContactMessageSent})
