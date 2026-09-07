@@ -32,6 +32,9 @@ function AboutModal({ open, onClose }) {
       </ul>
       <p className="mt-1 text-xs text-slate-500">{text.about.detailHint}</p>
 
+      <h3 className="mt-4 font-semibold text-slate-800">{text.about.aiHeading}</h3>
+      <p className="mt-1">{text.about.aiBody}</p>
+
       <h3 className="mt-4 font-semibold text-slate-800">{text.about.intervalHeading}</h3>
       <p className="mt-1">{text.about.intervalBody}</p>
 

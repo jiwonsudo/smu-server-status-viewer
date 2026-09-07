@@ -1,5 +1,7 @@
 import Link from 'next/link';
 import text from '../../lib/text';
+import { APP_VERSION } from '../../lib/version';
+import { CHANGELOG_URL } from '../../lib/config';
 
 const Footer = () => {
   return (
@@ -8,10 +10,19 @@ const Footer = () => {
         <Link href="/privacy" className="underline decoration-transparent underline-offset-4 hover:text-slate-200 hover:decoration-slate-500">
           {text.footer.privacyLabel}
         </Link>
+        <a
+          href={CHANGELOG_URL}
+          target="_blank"
+          rel="noreferrer"
+          title={text.footer.versionLinkLabel}
+          className="underline decoration-transparent underline-offset-4 hover:text-slate-200 hover:decoration-slate-500"
+        >
+          {text.footer.version(APP_VERSION)}
+        </a>
       </div>
       <p className="text-xs text-slate-400">{text.footer.copyright}</p>
     </footer>
   );
-}
+};
 
 export default Footer;
