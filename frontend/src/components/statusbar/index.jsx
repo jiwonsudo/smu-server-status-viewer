@@ -6,10 +6,13 @@ import { StarIcon } from '../icons';
 import { cn } from '../../lib/cn';
 import text from '../../lib/text';
 
-const DOT_BY_LEVEL = {
-  ok: 'bg-success',
-  slow: 'bg-warning',
-  down: 'bg-destructive',
+// 상태는 한눈에 잡혀야 한다. 정상은 조용하게, 느림/오류는 색이 분명하게 —
+// 오류는 아예 붉은 알약으로 감싸 어느 카드가 문제인지 바로 보이게 한다.
+const STATUS_STYLE = {
+  ok: { card: 'border-border', dot: 'bg-success', label: 'text-success' },
+  slow: { card: 'border-warning/40', dot: 'bg-warning', label: 'text-warning', pill: 'bg-warning/10' },
+  down: { card: 'border-destructive/50', dot: 'bg-destructive', label: 'text-destructive', pill: 'bg-destructive/10' },
+  loading: { card: 'border-border', dot: 'bg-muted-foreground/40', label: 'text-muted-foreground' },
 };
 
 const StatusBar = (props) => {
@@ -18,10 +21,11 @@ const StatusBar = (props) => {
   // 애니메이션 길이만큼만 켠다.
   const [pinPulsing, setPinPulsing] = useState(false);
 
-  const level = props.detail ? (!props.detail.ok ? 'down' : props.detail.slow ? 'slow' : 'ok') : null;
+  const level = props.detail ? (!props.detail.ok ? 'down' : props.detail.slow ? 'slow' : 'ok') : 'loading';
+  const s = STATUS_STYLE[level];
 
   return (
-    <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+    <div className={cn('rounded-xl border bg-card p-4 shadow-sm', s.card)}>
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-0.5">
           <button
@@ -58,8 +62,14 @@ const StatusBar = (props) => {
           </div>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1">
-          <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
-            <span className={cn('h-2 w-2 shrink-0 rounded-full', DOT_BY_LEVEL[level] || 'bg-muted-foreground/40')} />
+          <span
+            className={cn(
+              'flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-sm font-semibold',
+              s.label,
+              s.pill
+            )}
+          >
+            <span className={cn('h-2 w-2 shrink-0 rounded-full', s.dot)} />
             {props.statusMsg}
           </span>
           <span className="text-xs text-muted-foreground">{props.responseTime}</span>

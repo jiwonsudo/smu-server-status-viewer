@@ -7,17 +7,20 @@ import text from '../lib/text';
 function DetailModal({ open, onClose, title, statusMsg, statusColor, detail, siteKey }) {
   if (!open || !detail) return null;
 
-  const color = statusColor || (detail.ok ? 'var(--color-success)' : 'var(--color-destructive)');
+  const level = !detail.ok ? 'down' : detail.slow ? 'slow' : 'ok';
+  const tone =
+    level === 'down'
+      ? { dot: 'bg-destructive', text: 'text-destructive' }
+      : level === 'slow'
+        ? { dot: 'bg-warning', text: 'text-warning' }
+        : { dot: 'bg-success', text: 'text-success' };
 
   const header = (
     <div className="min-w-0">
       <p className="truncate text-xs text-muted-foreground">{title}</p>
       <div className="mt-1 flex items-center gap-2">
-        <span
-          className="h-2.5 w-2.5 shrink-0 rounded-full"
-          style={{ backgroundColor: color, boxShadow: `0 0 0 4px color-mix(in srgb, ${color} 15%, transparent)` }}
-        />
-        <h2 className="text-base font-semibold text-foreground">{statusMsg}</h2>
+        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${tone.dot}`} />
+        <h2 className={`text-base font-semibold ${tone.text}`}>{statusMsg}</h2>
       </div>
     </div>
   );

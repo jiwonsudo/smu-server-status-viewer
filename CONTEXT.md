@@ -3,7 +3,7 @@
 이 워크스페이스는 이제 단일 모노레포. `https://github.com/jiwonsudo/smu-server-status-viewer` 로 push 완료됨.
 - `frontend/`, `backend/` 둘 다 이 워크스페이스 루트의 git 저장소(하나의 `.git`)에 포함됨.
 - 기존 두 레포(`SMU-Server-Status-Viewer`, `SMU-Server-Status-Viewer-BE`)의 커밋 히스토리는 `git subtree add`로 각각 `frontend/`, `backend/` 프리픽스 아래 보존해서 가져옴 — `git log`에서 예전 커밋도 그대로 조회 가능.
-- 예전 두 레포의 로컬 작업 사본은 `frontend.old-standalone-repo/`, `backend.old-standalone-repo/`로 이름만 바꿔서 백업 보존 중(`.gitignore`에 추가해서 새 모노레포엔 안 들어감). 배포 전환 확인되면 삭제해도 됨.
+- 예전 두 레포의 로컬 작업 사본(`frontend.old-standalone-repo/`, `backend.old-standalone-repo/`)은 배포 전환이 확인돼서 2026-09-07 삭제함. 커밋 히스토리는 `git subtree add`로 이미 이 모노레포에 흡수돼 있음.
 - 기존 GitHub 레포 2개(`SMU-Server-Status-Viewer`, `SMU-Server-Status-Viewer-BE`)는 아직 그대로 살아있음. **삭제하지 말고 Archive 권장** — 새 모노레포로 배포 전환 확인 후에.
 
 ## 2026-09-07 업데이트 — 콜드스타트 해결 + 모니터링을 서버로 재통합
