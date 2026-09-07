@@ -1,95 +1,43 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
-import text from '../lib/text';
+import { Modal } from './ui/modal';
 import AiAnalysisSection from './AiAnalysisSection';
+import text from '../lib/text';
 
 function DetailModal({ open, onClose, title, statusMsg, statusColor, detail, siteKey }) {
-  const closeButtonRef = useRef(null);
-
-  useEffect(() => {
-    if (!open) return;
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    closeButtonRef.current?.focus();
-
-    const handleKeyDown = (event) => {
-      if (event.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [open, onClose]);
-
   if (!open || !detail) return null;
 
-  const color = statusColor || (detail.ok ? '#15803d' : '#dc2626');
+  const color = statusColor || (detail.ok ? 'var(--color-success)' : 'var(--color-destructive)');
 
-  return createPortal(
-    <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm motion-safe:animate-[modal-backdrop-in_150ms_ease-out] sm:items-center sm:p-4"
-      onClick={onClose}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="status-detail-heading"
-        onClick={(event) => event.stopPropagation()}
-        className="max-h-[85vh] w-full overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl motion-safe:animate-[modal-panel-in_200ms_ease-out] sm:max-w-md sm:rounded-2xl"
-      >
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <p className="truncate text-sm text-slate-500">{title}</p>
-            <div className="mt-1 flex items-center gap-2">
-              <span
-                className="h-2.5 w-2.5 shrink-0 rounded-full"
-                style={{ backgroundColor: color, boxShadow: `0 0 0 4px ${color}26` }}
-              />
-              <h2 id="status-detail-heading" className="text-lg font-semibold text-slate-900">
-                {statusMsg}
-              </h2>
-            </div>
-          </div>
-          <button
-            ref={closeButtonRef}
-            type="button"
-            onClick={onClose}
-            aria-label={text.infoModal.close}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-2xl leading-none text-slate-500 transition hover:bg-slate-100 hover:text-slate-600"
-          >
-            &times;
-          </button>
-        </div>
-
-        <p className="mt-4 text-sm leading-relaxed text-slate-600">{detail.explanation}</p>
-
-        <div className="mt-4 rounded-xl bg-slate-50 p-3">
-          <p className="text-xs font-medium text-slate-500">{text.detailModal.resultLabel}</p>
-          <p className="mt-1 text-sm text-slate-700">
-            {detail.httpCode ? `HTTP ${detail.httpCode}` : text.detailModal.notConnected} · {detail.reason}
-          </p>
-          {detail.responseTimeMs != null && (
-            <p className="mt-1 text-xs text-slate-500">{text.detailModal.responseTime(detail.responseTimeMs)}</p>
-          )}
-        </div>
-
-        {siteKey && <AiAnalysisSection siteKey={siteKey} isDown={!detail.ok} />}
-
-        <button
-          type="button"
-          onClick={onClose}
-          className="mt-5 w-full rounded-xl bg-slate-100 py-3 text-sm font-medium text-slate-600 transition hover:bg-slate-200 sm:hidden"
-        >
-          {text.infoModal.close}
-        </button>
+  const header = (
+    <div className="min-w-0">
+      <p className="truncate text-xs text-muted-foreground">{title}</p>
+      <div className="mt-1 flex items-center gap-2">
+        <span
+          className="h-2.5 w-2.5 shrink-0 rounded-full"
+          style={{ backgroundColor: color, boxShadow: `0 0 0 4px color-mix(in srgb, ${color} 15%, transparent)` }}
+        />
+        <h2 className="text-base font-semibold text-foreground">{statusMsg}</h2>
       </div>
-    </div>,
-    document.body
+    </div>
+  );
+
+  return (
+    <Modal open={open} onClose={onClose} title={title} header={header}>
+      <p className="text-sm leading-relaxed text-muted-foreground">{detail.explanation}</p>
+
+      <div className="mt-4 rounded-lg border border-border bg-muted/40 p-3">
+        <p className="text-xs font-medium text-muted-foreground">{text.detailModal.resultLabel}</p>
+        <p className="mt-1 text-sm text-foreground">
+          {detail.httpCode ? `HTTP ${detail.httpCode}` : text.detailModal.notConnected} · {detail.reason}
+        </p>
+        {detail.responseTimeMs != null && (
+          <p className="mt-1 text-xs text-muted-foreground">{text.detailModal.responseTime(detail.responseTimeMs)}</p>
+        )}
+      </div>
+
+      {siteKey && <AiAnalysisSection siteKey={siteKey} isDown={!detail.ok} />}
+    </Modal>
   );
 }
 

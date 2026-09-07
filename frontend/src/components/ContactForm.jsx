@@ -4,6 +4,8 @@ import { useState } from 'react';
 import axios from 'axios';
 import { URL_ROOT } from '../lib/config';
 import text from '../lib/text';
+import { Button } from './ui/button';
+import { Input, Textarea } from './ui/input';
 
 function ContactForm() {
   const [name, setName] = useState('');
@@ -11,7 +13,7 @@ function ContactForm() {
   const [message, setMessage] = useState('');
   const [website, setWebsite] = useState(''); // honeypot: 사람 눈엔 안 보이고 봇만 채움
   const [status, setStatus] = useState('idle'); // idle | sending | success | error
-  const [agreed, setAgreed] = useState(false); // 법적 책임 안내 확인 체크 — 이거 없으면 전송 버튼이 비활성
+  const [agreed, setAgreed] = useState(false);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -32,61 +34,54 @@ function ContactForm() {
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-3">
       <div className="flex flex-col gap-3 sm:flex-row">
-        <input
+        <Input
           type="text"
           value={name}
-          onChange={(event) => setName(event.target.value)}
+          onChange={(e) => setName(e.target.value)}
           placeholder={text.contact.namePlaceholder}
           required
-          className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-[#0E207F]"
         />
-        <input
+        <Input
           type="email"
           value={email}
-          onChange={(event) => setEmail(event.target.value)}
+          onChange={(e) => setEmail(e.target.value)}
           placeholder={text.contact.emailPlaceholder}
-          className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-[#0E207F]"
         />
       </div>
-      <textarea
+      <Textarea
         value={message}
-        onChange={(event) => setMessage(event.target.value)}
+        onChange={(e) => setMessage(e.target.value)}
         placeholder={text.contact.messagePlaceholder}
         required
         rows={4}
-        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-[#0E207F]"
       />
       <input
         type="text"
         value={website}
-        onChange={(event) => setWebsite(event.target.value)}
+        onChange={(e) => setWebsite(e.target.value)}
         tabIndex={-1}
         autoComplete="off"
         aria-hidden="true"
         className="hidden"
       />
-      <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
-        <p className="text-xs font-medium text-amber-900">{text.contact.abuseNotice}</p>
-        <label className="mt-2 flex items-center gap-2 text-xs font-medium text-amber-900">
+      <div className="rounded-md border border-warning/30 bg-warning/10 p-3">
+        <p className="text-xs font-medium text-warning">{text.contact.abuseNotice}</p>
+        <label className="mt-2 flex items-center gap-2 text-xs font-medium text-warning">
           <input
             type="checkbox"
             checked={agreed}
-            onChange={(event) => setAgreed(event.target.checked)}
-            className="h-3.5 w-3.5 rounded border-amber-400 text-[#0E207F] focus:ring-[#0E207F]"
+            onChange={(e) => setAgreed(e.target.checked)}
+            className="h-3.5 w-3.5 rounded border-warning/50 accent-primary"
           />
           {text.contact.abuseAgreeLabel}
         </label>
       </div>
       <div className="flex items-center gap-3">
-        <button
-          type="submit"
-          disabled={status === 'sending' || !name.trim() || !message.trim() || !agreed}
-          className="rounded-xl bg-[#0E207F] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#0a1860] disabled:cursor-not-allowed disabled:opacity-50"
-        >
+        <Button type="submit" disabled={status === 'sending' || !name.trim() || !message.trim() || !agreed}>
           {status === 'sending' ? text.contact.sendingLabel : text.contact.sendLabel}
-        </button>
-        {status === 'success' && <span className="text-sm text-emerald-600">{text.contact.successMessage}</span>}
-        {status === 'error' && <span className="text-sm text-red-500">{text.contact.errorMessage}</span>}
+        </Button>
+        {status === 'success' && <span className="text-sm text-success">{text.contact.successMessage}</span>}
+        {status === 'error' && <span className="text-sm text-destructive">{text.contact.errorMessage}</span>}
       </div>
     </form>
   );

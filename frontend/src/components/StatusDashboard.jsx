@@ -178,24 +178,24 @@ function StatusDashboard({ initialStatusData = {} }) {
     <div>
       <Toast message={toastMessage} />
 
-      <div className="sticky top-16 z-20 mb-4 flex flex-col items-end gap-1 bg-slate-50 py-2">
+      <div className="sticky top-16 z-20 mb-4 flex flex-col items-end gap-1 bg-background py-2">
         <div className="flex items-center gap-3 text-sm">
           <button
             type="button"
             onClick={() => setSortMode('name')}
-            className={sortMode === 'name' ? 'font-semibold text-slate-900 underline underline-offset-4' : 'text-slate-500 hover:text-slate-700'}
+            className={sortMode === 'name' ? 'font-semibold text-foreground underline underline-offset-4' : 'text-muted-foreground hover:text-foreground'}
           >
             {text.dashboard.sortName}
           </button>
           <button
             type="button"
             onClick={() => setSortMode('views')}
-            className={sortMode === 'views' ? 'font-semibold text-slate-900 underline underline-offset-4' : 'text-slate-500 hover:text-slate-700'}
+            className={sortMode === 'views' ? 'font-semibold text-foreground underline underline-offset-4' : 'text-muted-foreground hover:text-foreground'}
           >
             {text.dashboard.sortViews}
           </button>
         </div>
-        {sortMode === 'views' && <p className="text-xs text-slate-500">{text.dashboard.sortViewsHint}</p>}
+        {sortMode === 'views' && <p className="text-xs text-muted-foreground">{text.dashboard.sortViewsHint}</p>}
       </div>
 
       <div className="flex flex-col gap-4">
@@ -218,12 +218,12 @@ function StatusDashboard({ initialStatusData = {} }) {
       </div>
 
       <div
-        className={`fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-30 flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-500 shadow-sm transition-opacity duration-200 ${
+        className={`fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-30 flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground shadow-sm transition-opacity duration-200 ${
           footerVisible ? 'pointer-events-none opacity-0' : 'opacity-100'
         }`}
         aria-live="off"
       >
-        <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${cacheAgeSeconds == null ? 'bg-slate-300' : 'bg-emerald-500'}`} />
+        <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${cacheAgeSeconds == null ? 'bg-muted-foreground/40' : 'bg-success'}`} />
         {cacheAgeSeconds == null ? (
           text.dashboard.cacheChecking
         ) : (

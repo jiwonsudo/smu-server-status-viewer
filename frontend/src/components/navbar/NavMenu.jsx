@@ -44,7 +44,7 @@ function NavMenu() {
       <button
         type="button"
         onClick={() => setDiscordOpen(true)}
-        className="flex h-9 items-center gap-1.5 rounded-lg bg-[#5865F2] px-3 text-sm font-semibold text-white transition hover:brightness-110"
+        className="flex h-9 items-center gap-1.5 rounded-md bg-[#5865F2] px-3 text-sm font-semibold text-white transition hover:brightness-110"
       >
         <DiscordIcon className="h-4 w-4" />
         {text.nav.discordCta}
@@ -62,37 +62,24 @@ function NavMenu() {
         </button>
 
         {menuOpen && (
-          <div className="absolute right-0 top-full z-50 mt-1 w-52 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
-            <button
-              type="button"
-              onClick={() => {
-                setAboutOpen(true);
-                setMenuOpen(false);
-              }}
-              className="block w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
-            >
-              {text.nav.about}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setFaqOpen(true);
-                setMenuOpen(false);
-              }}
-              className="block w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
-            >
-              {text.nav.faq}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setContactOpen(true);
-                setMenuOpen(false);
-              }}
-              className="block w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
-            >
-              {text.nav.contact}
-            </button>
+          <div className="absolute right-0 top-full z-50 mt-1.5 w-52 overflow-hidden rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md">
+            {[
+              [text.nav.about, () => setAboutOpen(true)],
+              [text.nav.faq, () => setFaqOpen(true)],
+              [text.nav.contact, () => setContactOpen(true)],
+            ].map(([label, open]) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => {
+                  open();
+                  setMenuOpen(false);
+                }}
+                className="block w-full rounded-sm px-2.5 py-2 text-left text-sm text-foreground transition-colors hover:bg-accent"
+              >
+                {label}
+              </button>
+            ))}
           </div>
         )}
       </div>

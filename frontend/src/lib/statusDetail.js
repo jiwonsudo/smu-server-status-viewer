@@ -70,12 +70,11 @@ export function computeDisplayStatus(siteTitle, { status, message, responseTime,
   // status 문자열을 다시 매칭하지 않고 detail.ok/slow를 기준으로 색을 정한다 —
   // 백엔드가 예상 밖의 값을 보내도(레이트리밋 에러 페이지 등) 항상 detail의
   // 실제 성공/실패 판정을 따르게 해서, 실패인데 초록불이 뜨는 일이 없게 한다.
-  let statusColor = '#15803d'; // green
-  if (!detail.ok) {
-    statusColor = '#dc2626'; // red
-  } else if (detail.slow) {
-    statusColor = '#b45309'; // yellow — 응답은 오지만 느림 (800ms 초과)
-  }
+  // statusLevel: 카드/모달이 색을 직접 다루지 않고 이 값으로 토큰(success/
+  // warning/destructive)을 고른다. statusColor(hex)는 인라인 스타일이
+  // 필요한 곳(모달 상단 점 등) 하위호환용으로 남겨둔다.
+  const statusLevel = !detail.ok ? 'down' : detail.slow ? 'slow' : 'ok';
+  const statusColor = statusLevel === 'down' ? '#dc2626' : statusLevel === 'slow' ? '#b45309' : '#15803d';
 
   // 카드에는 "정상 서비스 / 비정상(이유)"처럼 사람이 바로 읽는 문구만 보여준다.
   // HTTP 코드 같은 기술적인 내용은 "상세 상태 보기"를 눌렀을 때만(detail.httpCode) 노출한다.
