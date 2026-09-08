@@ -8,9 +8,8 @@ import FaqModal from './FaqModal';
 import ContactModal from './ContactModal';
 import text from '../../lib/text';
 
-// 소개/FAQ를 여기 드롭다운 하나로 모았다 — 예전엔 nav에 버튼이 3~4개씩
-// 나란히 붙어있어서 지저분했다. 상태 알림은 더 이상 카카오 로그인이 아니라
-// 디스코드 서버 참여로 받으므로, 계정/로그인 개념 자체가 없다.
+// About/FAQ/Contact collapsed into one dropdown. There is no account or
+// login — status alerts come from joining the Discord server.
 function NavMenu() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);

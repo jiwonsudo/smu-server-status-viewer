@@ -2,9 +2,8 @@
 
 import { createPortal } from 'react-dom';
 
-// 즐겨찾기/알림 토글 같은 가벼운 액션 확인용 상단 토스트. 모달들과 같은
-// 이유로 document.body에 포털링한다 — 카드 안에 그냥 두면 조상 요소의
-// 스타일(overflow 등)에 걸려 잘리거나 엉뚱한 위치에 뜰 수 있다.
+// Top toast for lightweight action confirmations. Portaled to document.body
+// so ancestor overflow/positioning can't clip it.
 function Toast({ message }) {
   if (typeof document === 'undefined' || !message) return null;
 

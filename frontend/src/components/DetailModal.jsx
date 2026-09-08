@@ -2,18 +2,21 @@
 
 import { Modal } from './ui/modal';
 import AiAnalysisSection from './AiAnalysisSection';
+import { statusLevel } from '../lib/statusDetail';
 import text from '../lib/text';
 
-function DetailModal({ open, onClose, title, statusMsg, statusColor, detail, siteKey }) {
+const TONE = {
+  down: { dot: 'bg-destructive', text: 'text-destructive' },
+  slow: { dot: 'bg-warning', text: 'text-warning' },
+  ok: { dot: 'bg-success', text: 'text-success' },
+};
+
+// "상세 상태 보기" modal: explanation, technical result line, and the
+// outage-history / AI-analysis section.
+function DetailModal({ open, onClose, title, statusMsg, detail, siteKey }) {
   if (!open || !detail) return null;
 
-  const level = !detail.ok ? 'down' : detail.slow ? 'slow' : 'ok';
-  const tone =
-    level === 'down'
-      ? { dot: 'bg-destructive', text: 'text-destructive' }
-      : level === 'slow'
-        ? { dot: 'bg-warning', text: 'text-warning' }
-        : { dot: 'bg-success', text: 'text-success' };
+  const tone = TONE[statusLevel(detail)] ?? TONE.ok;
 
   const header = (
     <div className="min-w-0">

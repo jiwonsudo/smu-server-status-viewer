@@ -1,8 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import axios from 'axios';
-import { URL_ROOT } from '../lib/config';
+import { apiPost } from '../lib/api';
 import text from '../lib/text';
 import { Button } from './ui/button';
 import { Input, Textarea } from './ui/input';
@@ -11,7 +10,7 @@ function ContactForm() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
-  const [website, setWebsite] = useState(''); // honeypot: 사람 눈엔 안 보이고 봇만 채움
+  const [website, setWebsite] = useState(''); // honeypot: hidden from users, only bots fill it
   const [status, setStatus] = useState('idle'); // idle | sending | success | error
   const [agreed, setAgreed] = useState(false);
 
@@ -21,7 +20,8 @@ function ContactForm() {
 
     setStatus('sending');
     try {
-      await axios.post(`${URL_ROOT}/contact`, { name, email, message, website });
+      const res = await apiPost('/contact', { name, email, message, website });
+      if (!res.ok) throw new Error(String(res.status));
       setStatus('success');
       setName('');
       setEmail('');

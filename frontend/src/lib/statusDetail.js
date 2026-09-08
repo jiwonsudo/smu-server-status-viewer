@@ -1,18 +1,23 @@
-// 백엔드가 보낸 사이트 하나의 점검 결과(statuschecker.Result)를 두 군데에
-// 다른 수위로 보여준다:
-//  - 카드(statusMsg): "정상 서비스" / "비정상 (이유)"처럼 사람이 바로 읽는 말만.
-//  - "상세 상태 보기" 모달(detail): HTTP 코드까지 포함한 기술적인 요약
-//    ("HTTP 코드 · 이유", 연결됐으면 "응답시간 Nms")을 ok/timeout/error 어느
-//    경우든 같은 형태로 통일해서 보여준다.
-// Go가 던지는 원본 영문 에러 메시지(err.Error())는 어느 쪽에도 절대
-// 그대로 노출하지 않는다 — 사용자에게는 의미 없는 영어일 뿐이라.
+// Turns one site's check result (statuschecker.Result) into what the UI
+// needs, at two levels of detail:
+//  - card (statusMsg): plain human wording only.
+//  - detail modal (detail): a technical summary including the HTTP code.
+// Go's raw English error strings are never shown either way.
 //
-// 여기 나오는 문구 자체는 전부 lib/text.js의 statusDetail 섹션에서 가져온다 —
-// 문구만 고치려면 그 파일만 건드리면 된다.
+// All wording comes from lib/text.js (statusDetail section).
 
 import text from './text';
 
 export const SLOW_RESPONSE_THRESHOLD_MS = 800;
+
+// statusLevel collapses a detail object into the one token the UI styles on:
+// 'down' | 'slow' | 'ok', or 'loading' when there's no detail yet.
+export function statusLevel(detail) {
+  if (!detail) return 'loading';
+  if (!detail.ok) return 'down';
+  if (detail.slow) return 'slow';
+  return 'ok';
+}
 
 export function buildStatusDetail({ status, message, responseTime }) {
   if (status === 'ok') {
@@ -61,32 +66,19 @@ export function buildStatusDetail({ status, message, responseTime }) {
   };
 }
 
-// 상태 API 응답 하나를 카드에 필요한 형태(색/문구/상세)로 한 번에 계산한다.
-// 서버 컴포넌트(app/page.js)의 최초 fetch와 클라이언트의 SSE 구독
-// (StatusDashboard.jsx) 둘 다 이 함수를 써서 로직이 갈라지지 않게 한다.
+// Computes the card shape (message / detail) for one status response. Used
+// by both the server prefetch and the client SSE handler so the logic
+// doesn't diverge.
 export function computeDisplayStatus(siteTitle, { status, message, responseTime, checkedAt }) {
   const detail = buildStatusDetail({ status, message, responseTime });
 
-  // status 문자열을 다시 매칭하지 않고 detail.ok/slow를 기준으로 색을 정한다 —
-  // 백엔드가 예상 밖의 값을 보내도(레이트리밋 에러 페이지 등) 항상 detail의
-  // 실제 성공/실패 판정을 따르게 해서, 실패인데 초록불이 뜨는 일이 없게 한다.
-  // statusLevel: 카드/모달이 색을 직접 다루지 않고 이 값으로 토큰(success/
-  // warning/destructive)을 고른다. statusColor(hex)는 인라인 스타일이
-  // 필요한 곳(모달 상단 점 등) 하위호환용으로 남겨둔다.
-  const statusLevel = !detail.ok ? 'down' : detail.slow ? 'slow' : 'ok';
-  const statusColor = statusLevel === 'down' ? '#dc2626' : statusLevel === 'slow' ? '#b45309' : '#15803d';
-
-  // 카드에는 "정상 서비스 / 비정상(이유)"처럼 사람이 바로 읽는 문구만 보여준다.
-  // HTTP 코드 같은 기술적인 내용은 "상세 상태 보기"를 눌렀을 때만(detail.httpCode) 노출한다.
   let statusMsg = detail.ok ? text.statusDetail.cardOkPrefix(detail.reason) : text.statusDetail.cardBadPrefix(detail.reason);
   if (detail.slow) statusMsg += text.statusDetail.slowSuffix;
 
   return {
     statusMsg,
-    statusColor,
     responseTime: responseTime === 'N/A' ? `${responseTime}` : `${responseTime}ms`,
-    checkedAt: checkedAt || null, // 백엔드가 이 결과를 캐시에 넣은 시각 — "N초 전 확인됨" 표시용
+    checkedAt: checkedAt || null, // when the backend cached this result — for the "N초 전" badge
     detail,
   };
 }
-

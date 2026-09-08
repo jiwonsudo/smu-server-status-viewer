@@ -5,9 +5,9 @@ import { createPortal } from 'react-dom';
 import { cn } from '../../lib/cn';
 import text from '../../lib/text';
 
-// shadcn Dialog의 시각 언어를 따르되 Radix 없이 구현 — 오버레이 + 중앙
-// 패널(모바일은 하단 시트), ESC/바깥 클릭 닫기, body 스크롤 잠금, 닫기
-// 버튼 자동 포커스. header를 넘기면 기본 제목 영역을 대체한다.
+// shadcn Dialog's look without Radix: overlay + centered panel (bottom sheet
+// on mobile), ESC / outside-click to close, body scroll lock, close button
+// autofocus. Passing `header` replaces the default title area.
 export function Modal({ open, onClose, title, header, children, className }) {
   const closeRef = useRef(null);
 
