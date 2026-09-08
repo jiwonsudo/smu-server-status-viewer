@@ -78,20 +78,16 @@ function AnalysisBody({ data, isDown }) {
   }
 
   const incident = data.incident || {};
-  const history = data.history || {};
   const recent = data.recent || [];
+  const summary = data.summary || null;
+  const scorecard = summary?.scorecard || null;
   const showVerdict = isDown && (data.analysisPending || incident.verdict);
 
   return (
     <div className="flex flex-col gap-3">
       {showVerdict && <VerdictBlock incident={incident} pending={data.analysisPending} />}
 
-      <div>
-        <p className="text-xs font-medium text-muted-foreground">{text.aiAnalysis.stabilityHeading}</p>
-        <p className="mt-1 text-sm text-foreground">
-          {text.aiAnalysis.stabilitySummary({ count: history.count || 0, median: history.medianMinutes || 0 })}
-        </p>
-      </div>
+      {(summary?.blurb || scorecard) && <StabilityBlock summary={summary} scorecard={scorecard} />}
 
       {recent.length > 0 && (
         <div>
@@ -114,6 +110,36 @@ function AnalysisBody({ data, isDown }) {
 
       {showVerdict && incident.verdict && (
         <p className="text-[11px] text-muted-foreground/80">{text.aiAnalysis.disclaimer}</p>
+      )}
+    </div>
+  );
+}
+
+// "지금 접속해도 될까요?" — shown for every service, healthy or not. Prefers
+// the stored AI blurb; falls back to a deterministic sentence built from the
+// scorecard numbers.
+function StabilityBlock({ summary, scorecard }) {
+  const blurb = summary?.blurb?.trim();
+  const body = blurb || (scorecard ? text.aiAnalysis.scorecardSentence(scorecard) : '');
+  if (!body) return null;
+
+  return (
+    <div>
+      <div className="flex items-center gap-1.5">
+        <p className="text-xs font-medium text-muted-foreground">{text.aiAnalysis.summaryHeading}</p>
+        {blurb && (
+          <span className="rounded-sm border border-border px-1 py-px text-[10px] font-semibold tracking-wide text-muted-foreground">
+            {text.aiAnalysis.summaryBlurbTag}
+          </span>
+        )}
+      </div>
+      <p className="mt-1 text-sm leading-relaxed text-foreground">{body}</p>
+      {scorecard != null && (
+        <p className="mt-1 text-[11px] text-muted-foreground/70">
+          {text.aiAnalysis.summaryObservedNote(scorecard.observedDays || 0)}
+          {' · '}
+          {text.aiAnalysis.summaryDisclaimer}
+        </p>
       )}
     </div>
   );
