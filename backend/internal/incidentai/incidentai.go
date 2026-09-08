@@ -1,38 +1,32 @@
 // Package incidentai asks an LLM to judge whether an in-progress outage
 // looks transient or sustained, grounded only in the historical stats the
 // caller passes in. Raw HTTPS POST to the OpenAI Chat Completions API (no
-// SDK, same style as internal/mailer) — one provider for both this and the
-// embeddings in internal/embed, so one OPENAI_API_KEY covers the whole
-// incident-analysis feature. The model never runs at request time: the
-// server calls this once when an outage is confirmed and stores the
-// verdict (see internal/incidents).
+// SDK). Called once when an outage is confirmed; the verdict is then stored.
 package incidentai
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"strings"
 	"time"
+
+	"smu-server-status-viewer/backend/internal/httpx"
 )
 
 const apiURL = "https://api.openai.com/v1/chat/completions"
 
-// Model is a const so it's a one-line swap. gpt-4o-mini is plenty for a
-// short grounded JSON judgment ($0.15/$0.60 per 1M tokens ≈ $0.0005 per
-// call) and only fires on a real outage.
+// Model for the verdict. gpt-4o-mini is enough for a short grounded JSON
+// judgment and only fires on a real outage.
 const Model = "gpt-4o-mini"
 
 // ErrDisabled means OPENAI_API_KEY isn't configured.
 var ErrDisabled = errors.New("incidentai: OPENAI_API_KEY not set")
 
 // Input is everything the prompt needs. History* fields come from
-// incidentstore.Stats; the caller maps them over.
+// incidentstore.Stats.
 type Input struct {
 	SiteName       string
 	DownStatus     string // "error" | "timeout"
@@ -80,37 +74,20 @@ func Analyze(ctx context.Context, in Input) (Verdict, error) {
 		return Verdict{}, ErrDisabled
 	}
 
-	reqBody, err := json.Marshal(map[string]any{
-		"model":           Model,
-		"max_tokens":      500,
-		"temperature":     0.3,
-		"response_format": map[string]any{"type": "json_object"},
-		"messages": []any{
-			map[string]any{"role": "system", "content": systemPrompt},
-			map[string]any{"role": "user", "content": buildUserPrompt(in)},
-		},
-	})
+	raw, err := httpx.PostJSON(ctx, apiURL,
+		map[string]string{"Authorization": "Bearer " + key}, 60*time.Second,
+		map[string]any{
+			"model":           Model,
+			"max_tokens":      500,
+			"temperature":     0.3,
+			"response_format": map[string]any{"type": "json_object"},
+			"messages": []any{
+				map[string]any{"role": "system", "content": systemPrompt},
+				map[string]any{"role": "user", "content": buildUserPrompt(in)},
+			},
+		})
 	if err != nil {
 		return Verdict{}, err
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewReader(reqBody))
-	if err != nil {
-		return Verdict{}, err
-	}
-	req.Header.Set("Authorization", "Bearer "+key)
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{Timeout: 60 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return Verdict{}, err
-	}
-	defer resp.Body.Close()
-
-	raw, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode >= 300 {
-		return Verdict{}, fmt.Errorf("openai chat completions failed (HTTP %d): %s", resp.StatusCode, string(raw))
 	}
 
 	var parsed struct {
@@ -136,9 +113,9 @@ func Analyze(ctx context.Context, in Input) (Verdict, error) {
 	return v, nil
 }
 
+// parseVerdict is lenient about a stray ```json fence or prose around the object.
 func parseVerdict(s string) (Verdict, error) {
 	s = strings.TrimSpace(s)
-	// Be lenient about a stray ```json fence or prose around the object.
 	if i := strings.IndexByte(s, '{'); i >= 0 {
 		if j := strings.LastIndexByte(s, '}'); j > i {
 			s = s[i : j+1]

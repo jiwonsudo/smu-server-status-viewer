@@ -1,14 +1,12 @@
 // Package profanity does a lightweight Korean profanity check on contact
-// form submissions — not a moderation system, just enough to flag the
-// obvious cases so the site owner can triage. Matches are substring-based
-// on a normalized copy of the text (whitespace and common separators
-// stripped) so "ㅅ ㅂ" and "시-발" still hit.
+// form submissions — just enough to flag the obvious cases for triage.
+// Matching is substring-based on a normalized copy of the text (whitespace
+// and common separators stripped) so "ㅅ ㅂ" and "시-발" still hit.
 package profanity
 
 import "strings"
 
-// stems covers the common Korean profanity roots; normalization handles
-// spacing/separators so a small list catches most variants.
+// stems covers the common Korean profanity roots.
 var stems = []string{
 	"씨발", "씨빨", "시발", "시팔", "씨팔", "슈발", "쓰발", "씨바", "시바", "ㅅㅂ", "ㅄ",
 	"병신", "븅신", "빙신", "ㅂㅅ",

@@ -1,13 +1,11 @@
 // Package incidentstore persists a durable history of service outages and
-// the AI verdict computed for each one. Follows the clickstore pattern: a
-// nil *sql.DB puts the Store in no-op mode (Enabled() == false) so the rest
-// of the API keeps working without a database.
+// the AI verdict computed for each one. A nil *sql.DB puts the Store in
+// no-op mode (Enabled() == false).
 //
 // The embedding column is JSONB (a []float32 marshaled to JSON), not
 // pgvector's VECTOR type — retrieval is currently done with SQL aggregates
-// (see Stats), and embeddings are stored now so that switching to
-// pgvector cosine search is a migration + query change once the corpus is
-// large enough to make semantic retrieval worthwhile.
+// (see Stats). Embeddings are stored now so switching to pgvector cosine
+// search is a migration + query change once the corpus is large enough.
 package incidentstore
 
 import (
@@ -24,8 +22,7 @@ type Store struct {
 }
 
 // Incident is one outage. Verdict* fields are zero until the AI analysis
-// lands (a few seconds after StartedAt); Resolved* fields are zero while
-// the outage is ongoing.
+// lands; Resolved* fields are zero while the outage is ongoing.
 type Incident struct {
 	ID              int64      `json:"id"`
 	ServiceKey      string     `json:"serviceKey"`
@@ -45,8 +42,8 @@ type Incident struct {
 	VerdictAt         *time.Time `json:"verdictAt,omitempty"`
 }
 
-// Stats is the historical context handed to the LLM (and returned to the
-// frontend). All windows are "all recorded incidents for this service".
+// Stats is the historical context handed to the LLM and returned to the
+// frontend. All windows are "all recorded incidents for this service".
 type Stats struct {
 	Count             int `json:"count"`
 	ResolvedCount     int `json:"resolvedCount"`
@@ -97,7 +94,7 @@ func New(db *sql.DB) (*Store, error) {
 func (s *Store) Enabled() bool { return s.db != nil }
 
 // Open records the start of an outage and returns its id. summaryText and
-// embedding are attached later via SaveEnrichment once computed.
+// embedding are attached later via SaveEnrichment.
 func (s *Store) Open(ctx context.Context, serviceKey, siteKey, downStatus, contextTag string, startedAt time.Time) (int64, error) {
 	if s.db == nil {
 		return 0, nil
@@ -187,8 +184,8 @@ func scanIncident(row interface{ Scan(...any) error }) (*Incident, error) {
 	return &in, nil
 }
 
-// Latest returns the most recent incident for siteKey (open or resolved),
-// or (nil, nil) if none recorded / disabled.
+// Latest returns the most recent incident for siteKey (open or resolved), or
+// (nil, nil) if none recorded / disabled.
 func (s *Store) Latest(ctx context.Context, siteKey string) (*Incident, error) {
 	if s.db == nil {
 		return nil, nil
@@ -205,8 +202,7 @@ func (s *Store) Get(ctx context.Context, id int64) (*Incident, error) {
 	return scanIncident(s.db.QueryRowContext(ctx, incidentCols+`WHERE id = $1`, id))
 }
 
-// RecentIncident is a trimmed row for the "최근 안정성" list shown even when
-// the service is currently up.
+// RecentIncident is a trimmed row for the "최근 안정성" list.
 type RecentIncident struct {
 	StartedAt       time.Time  `json:"startedAt"`
 	ResolvedAt      *time.Time `json:"resolvedAt,omitempty"`
@@ -243,16 +239,16 @@ func (s *Store) Recent(ctx context.Context, siteKey string, limit int) ([]Recent
 	return out, rows.Err()
 }
 
-// Stats computes the historical context for serviceKey relative to now
-// (the moment the current outage started).
+// Stats computes the historical context for serviceKey relative to now (the
+// moment the current outage started).
 func (s *Store) Stats(ctx context.Context, serviceKey string, now time.Time) (Stats, error) {
 	var st Stats
 	if s.db == nil {
 		return st, nil
 	}
 
-	// Pull every resolved incident's duration + start time; small tables,
-	// so aggregate in Go rather than write six correlated SQL queries.
+	// Small table, so pull every incident and aggregate in Go rather than
+	// write six correlated SQL queries.
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT started_at, resolved_at, duration_minutes, COALESCE(context_tag, '')
 		FROM incidents
@@ -310,6 +306,7 @@ func (s *Store) Stats(ctx context.Context, serviceKey string, now time.Time) (St
 	return st, nil
 }
 
+// hourDiff is the clock-hour distance between a and b, wrapping at 24.
 func hourDiff(a, b int) int {
 	d := a - b
 	if d < 0 {

@@ -1,16 +1,7 @@
 // Package statuscache keeps the latest CheckServiceStatus result for each
 // monitored site in memory, refreshed on a fixed interval by a background
-// goroutine — instead of hitting the SMU site live on every HTTP request.
-//
-// Without this, each visitor's page load (and each client poll) used to
-// trigger a fresh outbound check per site, so backend↔SMU traffic scaled
-// with visitor count. With the cache, SMU traffic is constant (one check
-// per site per interval) no matter how many people are looking at the page.
-//
-// Cache also lets callers Subscribe() to be notified exactly when a refresh
-// finishes, so the SSE handler (see cmd/server/main.go's statusStreamHandler)
-// can push updates the instant they happen instead of the frontend polling
-// on its own clock and drifting out of sync with the backend's.
+// goroutine, so backend↔SMU traffic stays constant regardless of visitor
+// count. Callers can Subscribe() to be notified when a refresh finishes.
 package statuscache
 
 import (
@@ -32,12 +23,9 @@ type Cache struct {
 	subs   map[chan struct{}]struct{}
 }
 
-// New starts the cache and returns immediately: the first full check runs
-// in the background goroutine, not inline, so a cold boot serves /healthz
-// and the HTTP server right away instead of hanging for a check cycle.
-// Until that first refresh lands (~1-2s) Get returns ok=false and callers
-// fall back to their "pending" path (statusHandler → 503, SSE → empty
-// snapshot that the first update fills in).
+// New starts the cache and returns immediately: the first check runs in the
+// background goroutine, not inline. Until it lands (~1-2s) Get returns
+// ok=false and callers fall back to their "pending" path.
 func New(interval time.Duration, urls map[string]string) *Cache {
 	c := &Cache{
 		interval: interval,
@@ -60,17 +48,16 @@ func (c *Cache) loop(interval time.Duration, urls map[string]string) {
 	}
 }
 
-// refreshAll checks every site concurrently so the whole cycle takes about
-// as long as the single slowest site, not the sum of all of them.
+// refreshAll checks every site concurrently, so a cycle takes about as long
+// as the single slowest site.
 func (c *Cache) refreshAll(urls map[string]string) {
 	var wg sync.WaitGroup
 	for key, url := range urls {
 		wg.Add(1)
 		go func(key, url string) {
 			defer wg.Done()
-			// statuschecker의 http.Client 자체 타임아웃(10초)보다 여유를 둬서,
-			// 이 컨텍스트가 먼저 끊어버리는 바람에 실제 타임아웃 사유가
-			// "context deadline exceeded"로 가려지는 일이 없게 한다.
+			// Slightly longer than statuschecker's own 10s client timeout so
+			// this context doesn't mask the real timeout reason.
 			ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
 			defer cancel()
 			result := statuschecker.CheckServiceStatus(ctx, url)
@@ -105,18 +92,15 @@ func (c *Cache) Snapshot() map[string]statuschecker.Result {
 	return snapshot
 }
 
-// NextUpdateAt estimates when the next background refresh will land, so
-// clients can show an accurate "다음 업데이트까지 N초" countdown instead of
-// guessing from their own poll timer.
+// NextUpdateAt estimates when the next background refresh will land.
 func (c *Cache) NextUpdateAt() time.Time {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.lastRefreshedAt.Add(c.interval)
 }
 
-// Subscribe registers a channel that receives a (non-blocking, best-effort)
-// signal every time a refresh cycle finishes. Call the returned cancel func
-// when done (e.g. when the SSE connection closes) to stop leaking the chan.
+// Subscribe registers a channel that receives a non-blocking signal every
+// time a refresh cycle finishes. Call the returned cancel func when done.
 func (c *Cache) Subscribe() (<-chan struct{}, func()) {
 	ch := make(chan struct{}, 1)
 	c.subsMu.Lock()
@@ -140,7 +124,7 @@ func (c *Cache) notifySubscribers() {
 	for ch := range c.subs {
 		select {
 		case ch <- struct{}{}:
-		default: // 아직 이전 신호를 못 읽었으면 건너뜀 — 어차피 다음 신호가 최신 상태를 담고 있음
+		default: // previous signal not yet read — the next one carries the latest state
 		}
 	}
 }

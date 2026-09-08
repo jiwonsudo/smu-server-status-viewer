@@ -1,15 +1,9 @@
 // Package statemonitor watches the status cache for real, sustained status
-// transitions and fires the alerts (email + Discord) that used to live in
-// cmd/checkstatus. Moving this into the always-on server means transitions
-// are caught on the cache's own 15s clock instead of a flaky 5-minute
-// GitHub Actions cron.
+// transitions and fires the alerts (email + Discord) for them.
 //
-// Debounce: because 15s is short enough to catch a momentary blip, a change
-// isn't acted on until the new status holds for `Confirmations` consecutive
-// checks (default 2 = ~30s). A service's very first observation is taken as
-// the baseline silently. This confirmed/pending split is also the first
-// filter for the "일시적 vs 지속적" incident analysis added later — a blip
-// that can't clear 30s never becomes an incident.
+// Debounce: a change isn't acted on until the new status holds for
+// `Confirmations` consecutive checks (default 2). A service's first
+// observation is taken as the baseline silently.
 package statemonitor
 
 import (
@@ -25,8 +19,8 @@ import (
 	"smu-server-status-viewer/backend/internal/statuschecker"
 )
 
-// defaultConfirmations is how many consecutive checks a new status must
-// hold before statemonitor treats it as a real transition.
+// defaultConfirmations is how many consecutive checks a new status must hold
+// before it's treated as a real transition.
 const defaultConfirmations = 2
 
 // Cache is the subset of statuscache.Cache statemonitor needs.
@@ -35,15 +29,12 @@ type Cache interface {
 	Subscribe() (<-chan struct{}, func())
 }
 
-// Transition describes a confirmed status change. Passed to OnTransition so
-// later features (incident recording + AI analysis) can hook in without
-// touching this package.
+// Transition describes a confirmed status change, passed to OnTransition.
 type Transition struct {
 	ServiceKey     string    // "ECAMPUS"
 	SiteKey        string    // "ecampus"
 	PreviousStatus string    // raw: ok | error | timeout
 	CurrentStatus  string    // raw
-	PreviousSince  time.Time // when PreviousStatus began (zero if unknown)
 	At             time.Time // when this transition was confirmed
 }
 
@@ -55,9 +46,8 @@ type Config struct {
 }
 
 type confirmedStatus struct {
-	status    string
-	changedAt time.Time
-	known     bool
+	status string
+	known  bool
 }
 
 type pendingChange struct {
@@ -71,10 +61,9 @@ type Monitor struct {
 	confirmations int
 	onTransition  func(context.Context, Transition)
 
-	// dispatch delivers a confirmed transition (alerts + OnTransition).
-	// A seam so tests can observe transitions synchronously; production
-	// runs it in a goroutine so a slow SMTP/Discord call can't stall the
-	// evaluate loop.
+	// dispatch delivers a confirmed transition (alerts + OnTransition). A
+	// seam for tests; production runs it in a goroutine so a slow SMTP/
+	// Discord call can't stall the evaluate loop.
 	dispatch func(services.Service, Transition)
 
 	// Only the evaluate goroutine touches these — no mutex needed.
@@ -99,8 +88,8 @@ func New(cfg Config) *Monitor {
 	return m
 }
 
-// Start seeds the baseline from the store and then evaluates the cache on
-// every refresh signal until ctx is cancelled.
+// Start seeds the baseline from the store, then evaluates the cache on every
+// refresh signal until ctx is cancelled.
 func (m *Monitor) Start(ctx context.Context) {
 	seed, err := m.state.Load(ctx)
 	if err != nil {
@@ -108,13 +97,13 @@ func (m *Monitor) Start(ctx context.Context) {
 		seed = map[string]servicestate.Entry{}
 	}
 	for key, e := range seed {
-		m.confirmed[key] = confirmedStatus{status: e.Status, changedAt: e.ChangedAt, known: true}
+		m.confirmed[key] = confirmedStatus{status: e.Status, known: true}
 	}
 
 	updates, cancel := m.cache.Subscribe()
 	go func() {
 		defer cancel()
-		m.evaluate(ctx, m.cache.Snapshot()) // catch whatever's already cached
+		m.evaluate(ctx, m.cache.Snapshot())
 		for {
 			select {
 			case <-ctx.Done():
@@ -150,15 +139,15 @@ func (m *Monitor) evaluate(ctx context.Context, snapshot map[string]statuschecke
 		p.count++
 		m.pending[svc.Key] = p
 
-		// A known service must hold the new status for N checks; an
-		// unknown one (no baseline yet) is seeded on first sight.
+		// A known service must hold the new status for N checks; an unknown
+		// one (no baseline yet) is seeded on first sight.
 		if cur.known && p.count < m.confirmations {
 			continue
 		}
 
 		now := time.Now()
 		delete(m.pending, svc.Key)
-		m.confirmed[svc.Key] = confirmedStatus{status: raw, changedAt: now, known: true}
+		m.confirmed[svc.Key] = confirmedStatus{status: raw, known: true}
 		if err := m.saveState(ctx, svc.Key, raw, now); err != nil {
 			log.Printf("[statemonitor] %s 상태 저장 실패: %v", svc.Key, err)
 		}
@@ -169,7 +158,6 @@ func (m *Monitor) evaluate(ctx context.Context, snapshot map[string]statuschecke
 				SiteKey:        svc.SiteKey,
 				PreviousStatus: cur.status,
 				CurrentStatus:  raw,
-				PreviousSince:  cur.changedAt,
 				At:             now,
 			}
 			log.Printf("[statemonitor] %s: %s -> %s (확정)", svc.Key, cur.status, raw)
@@ -188,7 +176,7 @@ func (m *Monitor) handleTransition(svc services.Service, t Transition) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
-	mailer.SendStatusChangeEmail(apitext.SiteName(svc.SiteKey), t.PreviousStatus, t.CurrentStatus)
+	mailer.SendStatusChangeEmail(svc.DisplayName, t.PreviousStatus, t.CurrentStatus)
 
 	if discordnotify.Configured(svc.SiteKey) {
 		msg := apitext.StatusChangeDiscordMessage(svc.SiteKey, t.PreviousStatus, t.CurrentStatus)
@@ -202,7 +190,7 @@ func (m *Monitor) handleTransition(svc services.Service, t Transition) {
 	}
 }
 
-// healthy collapses statuschecker's raw status into up/down. Transitions
-// that don't flip this (e.g. error → timeout, both down) update the
-// recorded status but don't re-alert.
+// healthy collapses statuschecker's raw status into up/down. A transition
+// that doesn't flip this (e.g. error → timeout) updates the recorded status
+// but doesn't re-alert.
 func healthy(status string) bool { return status == "ok" }

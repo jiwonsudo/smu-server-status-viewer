@@ -1,6 +1,5 @@
 // Package statuschecker checks whether an SMU web service responds with
-// HTTP 200 within a short timeout, mirroring the shape the frontend already
-// expects (see frontend/src/components/StatusDashboard.jsx).
+// HTTP 200 within a short timeout.
 package statuschecker
 
 import (
@@ -13,14 +12,9 @@ import (
 	"smu-server-status-viewer/backend/internal/apitext"
 )
 
-// Result matches the JSON shape the Node/Express version returned.
-// ResponseTime is a number of milliseconds, except for the "timeout"
-// case where the JS version sent the string "N/A" — kept as `any` here
-// so the frontend doesn't need to change.
-//
-// CheckedAt isn't set here — CheckServiceStatus only performs the check.
-// statuscache.Cache fills it in when it stores the result, so the frontend
-// can show how stale the cached value is instead of re-checking live.
+// Result is the outcome of one check. ResponseTime is a number of
+// milliseconds, except on timeout where it's the string "N/A". CheckedAt is
+// not set here — statuscache.Cache fills it in when it stores the result.
 type Result struct {
 	Status       string    `json:"status"`
 	ResponseTime any       `json:"responseTime"`
@@ -29,23 +23,12 @@ type Result struct {
 	CheckedAt    time.Time `json:"checkedAt"`
 }
 
-// 상명대 서울캠퍼스 대상 서비스만 관리한다 (천안캠퍼스 전용 사이트 제외).
-var ServiceURL = map[string]string{
-	"HOME":       "https://www.smu.ac.kr/kor/index.do",
-	"NOTICE":     "https://www.smu.ac.kr/kor/life/notice.do",
-	"SAMMUL":     "https://smul.smu.ac.kr/",
-	"ECAMPUS":    "https://ecampus.smu.ac.kr/",
-	"CLOUD":      "https://cloud.smu.ac.kr/",
-	"DORM_SEOUL": "https://dormitory.smu.ac.kr/dormi/index.do",
-	"SUGANG":     "https://sugang.smu.ac.kr",
-}
-
 const browserUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 
 const maxRedirects = 5
 
-// 상명대 홈페이지가 살아있는데도 실제로 8초 가까이 걸리는 경우가 실측으로
-// 확인돼서, 5초는 느릴 뿐인 정상 사이트를 다운으로 오판하게 만들었다.
+// httpClient's 10s timeout is deliberately generous: the SMU homepage has
+// been measured taking ~8s while healthy.
 var httpClient = &http.Client{
 	Timeout: 10 * time.Second,
 	CheckRedirect: func(req *http.Request, via []*http.Request) error {
@@ -85,7 +68,7 @@ func CheckServiceStatus(ctx context.Context, url string) Result {
 			Error:        err.Error(),
 		}
 	}
-	defer resp.Body.Close() // 응답 바디는 필요 없으므로 읽지 않고 즉시 종료
+	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusOK {
 		return Result{Status: "ok", ResponseTime: duration, Message: apitext.StatusOK}

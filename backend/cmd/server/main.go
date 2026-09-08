@@ -2,88 +2,38 @@ package main
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"log"
-	"net"
 	"net/http"
 	"os"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
-	"smu-server-status-viewer/backend/internal/apitext"
 	"smu-server-status-viewer/backend/internal/clickstore"
 	"smu-server-status-viewer/backend/internal/db"
+	"smu-server-status-viewer/backend/internal/httpapi"
 	"smu-server-status-viewer/backend/internal/incidents"
 	"smu-server-status-viewer/backend/internal/incidentstore"
-	"smu-server-status-viewer/backend/internal/mailer"
-	"smu-server-status-viewer/backend/internal/profanity"
-	"smu-server-status-viewer/backend/internal/ratelimit"
+	"smu-server-status-viewer/backend/internal/services"
 	"smu-server-status-viewer/backend/internal/servicestate"
 	"smu-server-status-viewer/backend/internal/statemonitor"
 	"smu-server-status-viewer/backend/internal/statuscache"
-	"smu-server-status-viewer/backend/internal/statuschecker"
 )
 
-// allowedOrigins lists every frontend origin allowed to call this API with
-// credentials (cookies). Includes the old Vercel domain during the move to
-// the custom issmuok.site domain, plus localhost for local dev.
-var allowedOrigins = map[string]bool{
-	"https://issmuok.site":                        true,
-	"https://www.issmuok.site":                    true,
-	"https://smu-server-status-viewer.vercel.app": true,
-	"http://localhost:3000":                       true,
-}
-
-// statusRefreshInterval은 statusCache 백그라운드 갱신 주기이자, SSE로
-// 프론트에 알려주는 "다음 업데이트까지" 계산의 기준이 되는 값이다.
+// statusRefreshInterval is the statusCache background refresh period, and
+// the basis for the "time until next update" value sent over SSE.
 const statusRefreshInterval = 15 * time.Second
 
-// statusRoutes maps each public status-check path to the ServiceURL key it checks.
-var statusRoutes = map[string]string{
-	"/status/home":       "HOME",
-	"/status/notice":     "NOTICE",
-	"/status/sammul":     "SAMMUL",
-	"/status/ecampus":    "ECAMPUS",
-	"/status/cloud":      "CLOUD",
-	"/status/dorm-seoul": "DORM_SEOUL",
-	"/status/sugang":     "SUGANG",
-}
-
-// validSiteKeys is the set of site keys the frontend is allowed to record a
-// click for — matches statusRoutes' path suffixes (frontend's SITE_INFOS).
-var validSiteKeys = map[string]bool{
-	"home": true, "ecampus": true, "sammul": true,
-	"cloud": true, "dorm-seoul": true, "sugang": true,
-}
-
 func main() {
-	_ = godotenv.Load() // .env가 없어도(배포 환경) 조용히 넘어감
+	_ = godotenv.Load()
 
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "5000"
 	}
 
-	limiter := ratelimit.New(time.Minute, 20)
-
-	// /status/*는 이제 캐시를 읽기만 해서 비용이 거의 0이고, 방문자 수와
-	// SMU 쪽 트래픽이 완전히 분리됐다(아래 statusCache 참고). 그런데 주
-	// 이용자가 캠퍼스 와이파이(NAT) 뒤에 있어서 여러 학생이 같은 공인
-	// IP를 공유하는 경우가 흔하다 — 실제 장애로 다 같이 몰려서 새로고침
-	// 하는, 가장 막으면 안 되는 순간에 20/분에 걸릴 수 있다는 뜻이다.
-	// 그래서 이 라우트만 사실상 무제한에 가깝게 훨씬 넉넉하게 둔다.
-	// 이메일 발송/DB 쓰기가 있는 나머지 라우트는 기존 20/분을 유지한다.
-	statusLimiter := ratelimit.New(time.Minute, 1200)
-
-	// 요청이 올 때마다 SMU 사이트를 라이브로 찔러보면 방문자 수만큼
-	// SMU 쪽 트래픽이 그대로 늘어난다. 대신 백그라운드에서 15초마다
-	// 한 번만 전체 사이트를 확인해 캐시해두고, /status/* 요청은 그
-	// 캐시를 즉시 읽기만 한다 — 방문자가 몇 명이든 SMU로 나가는 요청은
-	// 항상 15초에 한 번, 6개로 고정된다.
-	statusCache := statuscache.New(statusRefreshInterval, statuschecker.ServiceURL)
+	// Background refresh every interval so outbound traffic to SMU stays
+	// constant regardless of visitor count; /status/* only reads the cache.
+	statusCache := statuscache.New(statusRefreshInterval, services.URLByKey())
 
 	conn, err := db.Open(os.Getenv("DATABASE_URL"))
 	if err != nil {
@@ -99,10 +49,6 @@ func main() {
 		log.Println("[clicks] DATABASE_URL이 없어 조회수를 기록하지 않습니다.")
 	}
 
-	// 예전엔 GitHub Actions(cmd/checkstatus)가 5분마다 상태 전환을 감지해
-	// 이메일/디스코드 알림을 보냈다. 서버가 상시 가동되면서(외부 업타임
-	// 핑거) 그 역할을 여기로 옮겼다 — statuscache의 15초 갱신에 붙어서
-	// 30초(2회) 이상 지속되는 전환만 알림을 보낸다.
 	serviceState, err := servicestate.New(conn)
 	if err != nil {
 		log.Fatalf("[statemonitor] 스키마 준비 실패: %v", err)
@@ -111,9 +57,6 @@ func main() {
 		log.Println("[statemonitor] DATABASE_URL이 없어 상태 기준선을 메모리로만 유지합니다(재시작 시 초기화).")
 	}
 
-	// 장애 이력 + AI 패턴 분석. 상태 전환이 확정되면 incident로 기록하고
-	// (핫패스 밖에서) 임베딩·통계·Claude 판정을 붙인다. DB/키가 없으면
-	// 조용히 비활성.
 	incidentStore, err := incidentstore.New(conn)
 	if err != nil {
 		log.Fatalf("[incidents] 스키마 준비 실패: %v", err)
@@ -136,337 +79,16 @@ func main() {
 	})
 	monitor.Start(context.Background())
 
-	mux := http.NewServeMux()
-	// Render 무료 티어는 트래픽이 없으면 프로세스를 재운다 — 그러면
-	// statusCache의 백그라운드 갱신도, statemonitor의 전환 알림도 같이
-	// 멈춘다. 외부 업타임 핑거(cron-job.org)가 2분마다 이 경로를 찔러
-	// (Render의 유휴 판정 15분보다 훨씬 짧게) 서버를 계속 깨워둔다.
-	// .github/workflows/monitor.yml은 이 핑거가 죽었을 때를 잡는 15분
-	// 간격 2차 안전망일 뿐이다.
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
+	handler := httpapi.New(httpapi.Config{
+		Cache:         statusCache,
+		ClickStore:    clickStore,
+		IncidentStore: incidentStore,
+		IncidentSvc:   incidentSvc,
+		AdminToken:    os.Getenv("ADMIN_TOKEN"),
 	})
-	for path, serviceKey := range statusRoutes {
-		mux.HandleFunc(path, statusHandler(statusCache, serviceKey))
-	}
-	// 프론트가 자기 타이머로 폴링하면 백엔드의 15초 갱신 주기랑 자연히
-	// 어긋나서(두 개의 독립된 시계) 표시되는 "N초 전" 값이 튀는 문제가
-	// 생긴다. 대신 SSE로 캐시가 갱신되는 그 순간 값을 그대로 밀어준다 —
-	// 시계가 백엔드 하나뿐이라 어긋날 일 자체가 없다.
-	mux.HandleFunc("GET /status/stream", statusStreamHandler(statusCache))
-	mux.HandleFunc("GET /api/incidents/{site}/analysis", incidentAnalysisHandler(incidentStore))
-	// 관리자용: 실패했거나 확인이 필요한 incident의 AI 분석을 다시 돌린다.
-	// ADMIN_TOKEN이 없으면 라우트 자체가 404처럼 조용히 막힌다.
-	mux.HandleFunc("POST /api/incidents/{id}/reanalyze", incidentReanalyzeHandler(incidentSvc, os.Getenv("ADMIN_TOKEN")))
-	mux.HandleFunc("/contact", contactHandler)
-	mux.HandleFunc("POST /clicks/{site}", clickIncrementHandler(clickStore))
-	mux.HandleFunc("GET /clicks", clickListHandler(clickStore))
-
-	handler := rateLimitMiddleware(limiter, statusLimiter, corsMiddleware(mux))
 
 	log.Printf("Server running at http://localhost:%s", port)
 	if err := http.ListenAndServe(":"+port, handler); err != nil {
 		log.Fatal(err)
 	}
-}
-
-func statusHandler(cache *statuscache.Cache, serviceKey string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		result, ok := cache.Get(serviceKey)
-		if !ok {
-			w.WriteHeader(http.StatusServiceUnavailable)
-			json.NewEncoder(w).Encode(map[string]string{"message": apitext.StatusCheckPending})
-			return
-		}
-		json.NewEncoder(w).Encode(result)
-	}
-}
-
-// statusStreamPayload is one SSE "data:" event's JSON body. Sites is keyed
-// by the same path the frontend already uses for statusData (e.g.
-// "/status/home"), so the client can drop this straight into that map.
-type statusStreamPayload struct {
-	Sites        map[string]statuschecker.Result `json:"sites"`
-	NextUpdateAt time.Time                       `json:"nextUpdateAt"`
-}
-
-func buildStatusStreamPayload(cache *statuscache.Cache) statusStreamPayload {
-	snapshot := cache.Snapshot()
-	sites := make(map[string]statuschecker.Result, len(statusRoutes))
-	for path, serviceKey := range statusRoutes {
-		if result, ok := snapshot[serviceKey]; ok {
-			sites[path] = result
-		}
-	}
-	return statusStreamPayload{Sites: sites, NextUpdateAt: cache.NextUpdateAt()}
-}
-
-// statusStreamHandler pushes the full status snapshot over Server-Sent
-// Events every time statusCache finishes a refresh, instead of making the
-// frontend poll on its own timer and drift out of sync with the backend's.
-func statusStreamHandler(cache *statuscache.Cache) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		flusher, ok := w.(http.Flusher)
-		if !ok {
-			http.Error(w, "streaming unsupported", http.StatusInternalServerError)
-			return
-		}
-
-		w.Header().Set("Content-Type", "text/event-stream")
-		w.Header().Set("Cache-Control", "no-cache")
-		w.Header().Set("Connection", "keep-alive")
-		w.WriteHeader(http.StatusOK)
-
-		writeEvent := func() bool {
-			payload, err := json.Marshal(buildStatusStreamPayload(cache))
-			if err != nil {
-				return false
-			}
-			if _, err := fmt.Fprintf(w, "data: %s\n\n", payload); err != nil {
-				return false
-			}
-			flusher.Flush()
-			return true
-		}
-
-		if !writeEvent() { // 연결 직후 지금 상태를 바로 한 번 보내준다
-			return
-		}
-
-		updates, cancel := cache.Subscribe()
-		defer cancel()
-
-		for {
-			select {
-			case <-r.Context().Done(): // 클라이언트가 연결을 끊음
-				return
-			case _, ok := <-updates:
-				if !ok || !writeEvent() {
-					return
-				}
-			}
-		}
-	}
-}
-
-func clickIncrementHandler(store *clickstore.Store) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		site := r.PathValue("site")
-		if !validSiteKeys[site] {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-		if err := store.Increment(r.Context(), site); err != nil {
-			log.Printf("[clicks] %s 증가 실패: %v", site, err)
-		}
-		w.WriteHeader(http.StatusNoContent)
-	}
-}
-
-func clickListHandler(store *clickstore.Store) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		counts, err := store.All(r.Context())
-		if err != nil {
-			log.Printf("[clicks] 목록 조회 실패: %v", err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(counts)
-	}
-}
-
-// ---- 장애 이력 AI 분석 ----
-
-// incidentAnalysisResponse feeds the detail modal's "장애 이력 / AI 분석"
-// section — shown for every service, not just ones currently down. The LLM
-// never runs here: this only reads what the state monitor stored when an
-// outage was confirmed. analysisPending is true while the verdict for an
-// ongoing outage is still being computed (the first few seconds).
-type incidentAnalysisResponse struct {
-	HasData         bool                           `json:"hasData"`
-	AnalysisPending bool                           `json:"analysisPending"`
-	Incident        *incidentstore.Incident        `json:"incident,omitempty"`
-	History         *incidentstore.Stats           `json:"history,omitempty"`
-	Recent          []incidentstore.RecentIncident `json:"recent,omitempty"`
-}
-
-func incidentAnalysisHandler(store *incidentstore.Store) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-
-		site := r.PathValue("site")
-		if !validSiteKeys[site] {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-
-		latest, err := store.Latest(r.Context(), site)
-		if err != nil {
-			log.Printf("[incidents] %s 분석 조회 실패: %v", site, err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		if latest == nil {
-			json.NewEncoder(w).Encode(incidentAnalysisResponse{HasData: false})
-			return
-		}
-
-		// verdict가 비어있고 발생한 지 얼마 안 됐으면 "분석 중"; 오래됐는데도
-		// 비어있으면 분석이 실패했거나 키가 없는 것 — 그 경우 pending을 내리고
-		// 프론트가 verdict 카드를 안 그리게 한다.
-		resp := incidentAnalysisResponse{
-			HasData:         true,
-			AnalysisPending: latest.Verdict == "" && time.Since(latest.StartedAt) < 10*time.Minute,
-			Incident:        latest,
-		}
-		// history는 지금까지 기록된 이 서비스의 전체 장애 요약(안정성 표시용).
-		// 진행 중 장애의 "일시적/지속적" 근거 수치는 verdictReasoning에 이미
-		// 박혀 있으므로 여기서 다시 계산하지 않는다.
-		if stats, err := store.Stats(r.Context(), latest.ServiceKey, time.Now()); err == nil {
-			resp.History = &stats
-		}
-		if recent, err := store.Recent(r.Context(), site, 5); err == nil {
-			resp.Recent = recent
-		}
-		json.NewEncoder(w).Encode(resp)
-	}
-}
-
-func incidentReanalyzeHandler(svc *incidents.Service, adminToken string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if adminToken == "" || r.Header.Get("X-Admin-Token") != adminToken {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-		id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
-		verdict, err := svc.Reanalyze(r.Context(), id)
-		w.Header().Set("Content-Type", "application/json")
-		if err != nil {
-			log.Printf("[incidents] #%d 재분석 실패: %v", id, err)
-			w.WriteHeader(http.StatusBadGateway)
-			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
-			return
-		}
-		json.NewEncoder(w).Encode(map[string]string{"verdict": verdict})
-	}
-}
-
-// ---- 문의/건의사항 ----
-
-const maxContactMessageBytes = 1 << 12 // 4KB, plenty for a suggestion form
-
-type contactRequest struct {
-	Name    string `json:"name"`
-	Email   string `json:"email"`
-	Message string `json:"message"`
-	// Website is a honeypot field: real users never see or fill it (hidden
-	// in the form via CSS), so a non-empty value means a bot filled every
-	// field it could find.
-	Website string `json:"website"`
-}
-
-func contactHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
-	var req contactRequest
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxContactMessageBytes)).Decode(&req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"message": apitext.InvalidRequestFormat})
-		return
-	}
-
-	if req.Website != "" {
-		// Silently pretend success to a bot so it doesn't learn to adapt.
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]string{"message": apitext.ContactMessageSent})
-		return
-	}
-
-	req.Message = strings.TrimSpace(req.Message)
-	if req.Message == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"message": apitext.ContactMessageMissing})
-		return
-	}
-
-	name := strings.TrimSpace(req.Name)
-	hits := profanity.Find(req.Message + "\n" + name)
-	if len(hits) > 0 {
-		log.Printf("[contact] 욕설 의심 제출 (IP %s): %v", clientIP(r), hits)
-	}
-	mailer.SendContactMessage(name, strings.TrimSpace(req.Email), req.Message, clientIP(r), hits)
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"message": apitext.ContactMessageSent})
-}
-
-// ---- 미들웨어 ----
-
-func corsMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		origin := r.Header.Get("Origin")
-		if allowedOrigins[origin] {
-			w.Header().Set("Access-Control-Allow-Origin", origin)
-			w.Header().Set("Access-Control-Allow-Credentials", "true")
-			w.Header().Set("Vary", "Origin")
-		}
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
-}
-
-// rateLimitMiddleware applies a per-IP rate limit: statusLimiter (very
-// generous, see where it's constructed) for the read-only status and
-// incident-analysis routes, limiter (20/min) for everything else. Client
-// IP is read from X-Forwarded-For since Render sits in front as a reverse
-// proxy (equivalent of Express's `app.set('trust proxy', 1)`).
-//
-// /api/incidents/*/analysis is on the generous bucket for the same reason
-// /status/* is: during a real outage many students behind the campus NAT
-// (one shared public IP) open the detail modal at once, and this is a
-// cheap read-only DB query with no LLM cost.
-func rateLimitMiddleware(limiter, statusLimiter *ratelimit.Limiter, next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		activeLimiter := limiter
-		if strings.HasPrefix(r.URL.Path, "/status/") ||
-			(r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/incidents/")) {
-			activeLimiter = statusLimiter
-		}
-		if !activeLimiter.Allow(clientIP(r)) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusTooManyRequests)
-			json.NewEncoder(w).Encode(map[string]string{"message": apitext.RateLimited})
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
-}
-
-func clientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		if first := strings.TrimSpace(strings.Split(xff, ",")[0]); first != "" {
-			return first
-		}
-	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
 }
