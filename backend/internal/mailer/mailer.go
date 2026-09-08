@@ -1,28 +1,24 @@
-// Package mailer sends emails via the Resend HTTP API (https://resend.com).
-// Render's outbound network blocks the usual SMTP ports (25/465/587) — every
-// attempt via gomail/SMTP failed with a TCP dial timeout — so this goes over
-// plain HTTPS (443) instead, which isn't blocked. Mirrors the old behavior:
-// silently skips (with a warning log) when the API key or recipient isn't
-// configured, rather than failing the request that triggered it.
+// Package mailer sends emails via the Resend HTTP API (https://resend.com)
+// over plain HTTPS, since Render blocks the usual outbound SMTP ports.
+// Silently skips (with a warning log) when the API key or recipient isn't
+// configured.
 package mailer
 
 import (
-	"bytes"
-	"encoding/json"
+	"context"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"time"
 
 	"smu-server-status-viewer/backend/internal/apitext"
+	"smu-server-status-viewer/backend/internal/httpx"
 )
 
 const resendURL = "https://api.resend.com/emails"
 
-// defaultFrom is Resend's shared sending address, usable without verifying
-// a domain first. Once a domain (e.g. issmuok.site) is verified in Resend,
-// set RESEND_FROM to an address on it for better deliverability.
+// defaultFrom is Resend's shared sending address, usable without verifying a
+// domain first. Set RESEND_FROM to an address on a verified domain for
+// better deliverability.
 const defaultFrom = "onboarding@resend.dev"
 
 func sendEmail(to, subject, body string, replyTo string) error {
@@ -47,30 +43,9 @@ func sendEmail(to, subject, body string, replyTo string) error {
 		payload["reply_to"] = replyTo
 	}
 
-	payloadJSON, err := json.Marshal(payload)
-	if err != nil {
-		return err
-	}
-
-	req, err := http.NewRequest(http.MethodPost, resendURL, bytes.NewReader(payloadJSON))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Authorization", "Bearer "+apiKey)
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 300 {
-		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("resend API failed (HTTP %d): %s", resp.StatusCode, string(respBody))
-	}
-	return nil
+	_, err := httpx.PostJSON(context.Background(), resendURL,
+		map[string]string{"Authorization": "Bearer " + apiKey}, 10*time.Second, payload)
+	return err
 }
 
 func SendStatusChangeEmail(serviceName, previousStatus, currentStatus string) {
@@ -89,10 +64,9 @@ func SendStatusChangeEmail(serviceName, previousStatus, currentStatus string) {
 	}
 }
 
-// SendContactMessage forwards a visitor's 문의/건의사항 form submission.
-// Reuses ALERT_EMAIL_TO since the same person (site owner) receives both
-// status alerts and contact messages. clientIP + profanityHits go in the
-// body for abuse triage; a non-empty profanityHits also flags the subject.
+// SendContactMessage forwards a visitor's contact form submission to
+// ALERT_EMAIL_TO. clientIP + profanityHits go in the body for abuse triage;
+// a non-empty profanityHits also flags the subject.
 func SendContactMessage(name, senderEmail, message, clientIP string, profanityHits []string) {
 	to := os.Getenv("ALERT_EMAIL_TO")
 

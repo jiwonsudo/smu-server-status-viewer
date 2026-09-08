@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { URL_ROOT } from '../lib/config';
+import { apiGet } from '../lib/api';
 import text from '../lib/text';
 import { Badge } from './ui/badge';
 
@@ -11,16 +11,14 @@ const VERDICT_VARIANT = {
   판단보류: 'secondary',
 };
 
-// 같은 세션에서 모달을 여러 번 여닫아도 매번 요청하지 않도록 아주 짧게 캐시.
+// Short cache so reopening the modal in one session doesn't refetch.
 const cache = new Map(); // siteKey -> { at, data }
 const CACHE_TTL_MS = 60 * 1000;
 
 async function fetchAnalysis(siteKey) {
   const hit = cache.get(siteKey);
   if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.data;
-  const res = await fetch(`${URL_ROOT}/api/incidents/${siteKey}/analysis`, { cache: 'no-store' });
-  if (!res.ok) throw new Error(String(res.status));
-  const data = await res.json();
+  const data = await apiGet(`/api/incidents/${siteKey}/analysis`, { cache: 'no-store' });
   cache.set(siteKey, { at: Date.now(), data });
   return data;
 }
@@ -33,8 +31,9 @@ function fmtDate(iso) {
   }
 }
 
-// 상세 모달의 "장애 이력 / 분석" 섹션. 모든 서비스에 노출된다 — 버튼을
-// 누르면 저장된 값(요청 시점에 모델을 부르지 않는다)을 불러온다.
+// The detail modal's outage-history / analysis section, shown for every
+// service. The button loads the stored values — the model is never called
+// at request time.
 function AiAnalysisSection({ siteKey, isDown }) {
   const [state, setState] = useState('idle'); // idle | loading | error | done
   const [data, setData] = useState(null);

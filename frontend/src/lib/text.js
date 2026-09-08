@@ -164,7 +164,6 @@ const text = {
     checkingStatus: '서버 확인 중...',
     delayedResponseTime: '잠시만 기다려주세요',
     checkingResponseTime: '응답 확인 중...',
-    cacheChecking: '서버 확인 중...',
     cacheAgeSuffix: (seconds) => `${seconds}초 전 갱신됨`,
     nextUpdateSuffix: (seconds) => `${seconds}초 후 업데이트`,
   },

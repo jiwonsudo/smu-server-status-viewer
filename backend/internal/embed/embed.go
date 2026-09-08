@@ -1,25 +1,21 @@
 // Package embed turns a short natural-language incident summary into a
-// vector via the OpenAI embeddings API (Anthropic has no embeddings
-// endpoint). Plain HTTPS POST, same shape as internal/mailer and
-// internal/discordnotify. If OPENAI_API_KEY isn't set, Embed is a no-op
-// that returns (nil, nil) — the incident is still recorded, just without
-// an embedding.
+// vector via the OpenAI embeddings API. If OPENAI_API_KEY isn't set, Embed
+// is a no-op that returns (nil, nil).
 package embed
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"time"
+
+	"smu-server-status-viewer/backend/internal/httpx"
 )
 
 const (
 	apiURL = "https://api.openai.com/v1/embeddings"
-	// model dimension is 1536; kept small + cheap ($0.02 / 1M tokens).
+	// 1536 dimensions.
 	model = "text-embedding-3-small"
 )
 
@@ -30,28 +26,11 @@ func Embed(ctx context.Context, text string) ([]float32, error) {
 		return nil, nil
 	}
 
-	body, err := json.Marshal(map[string]any{"model": model, "input": text})
+	raw, err := httpx.PostJSON(ctx, apiURL,
+		map[string]string{"Authorization": "Bearer " + key}, 15*time.Second,
+		map[string]any{"model": model, "input": text})
 	if err != nil {
 		return nil, err
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewReader(body))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+key)
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{Timeout: 15 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	raw, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("openai embeddings failed (HTTP %d): %s", resp.StatusCode, string(raw))
 	}
 
 	var parsed struct {

@@ -1,6 +1,5 @@
-// Package ratelimit is a small in-memory fixed-window limiter, replacing
-// express-rate-limit. Good enough for a single-instance low-traffic API;
-// not meant to survive multiple server instances.
+// Package ratelimit is a small in-memory fixed-window per-key limiter.
+// Single-instance only; not meant to survive multiple server instances.
 package ratelimit
 
 import (
@@ -51,8 +50,8 @@ func (l *Limiter) Allow(key string) bool {
 	return true
 }
 
-// sweepStale periodically drops buckets whose window has long expired so
-// the map doesn't grow unbounded over a long-running process.
+// sweepStale periodically drops long-expired buckets so the map doesn't grow
+// unbounded.
 func (l *Limiter) sweepStale() {
 	ticker := time.NewTicker(10 * time.Minute)
 	defer ticker.Stop()

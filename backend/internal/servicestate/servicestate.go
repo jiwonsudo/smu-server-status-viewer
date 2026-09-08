@@ -1,13 +1,9 @@
 // Package servicestate persists the last confirmed status of each monitored
 // service in Postgres, so a server restart doesn't lose the baseline and
-// re-fire "장애" alerts on the first check after boot. Replaces the old
-// git-tracked data/status.json (Render's free tier has no persistent disk,
-// so a file wouldn't survive a restart anyway).
+// re-fire alerts on the first check after boot.
 //
-// If DATABASE_URL isn't configured, Store is a no-op (mirrors clickstore /
-// mailer): Load returns nothing and Save drops the write. The state monitor
-// then runs purely in memory — transition detection still works while the
-// process is up, it just loses its baseline across restarts.
+// If DATABASE_URL isn't configured, Store is a no-op: Load returns nothing
+// and Save drops the write.
 package servicestate
 
 import (
@@ -26,8 +22,7 @@ type Entry struct {
 	ChangedAt time.Time // when the service last transitioned into Status
 }
 
-// New wraps the shared DB connection (see internal/db). A nil db is valid
-// and puts the Store in disabled/no-op mode.
+// New wraps the shared DB connection. A nil db puts the Store in no-op mode.
 func New(db *sql.DB) (*Store, error) {
 	if db == nil {
 		return &Store{}, nil
@@ -49,8 +44,7 @@ func New(db *sql.DB) (*Store, error) {
 
 func (s *Store) Enabled() bool { return s.db != nil }
 
-// Load returns the last confirmed status of every service, keyed by service
-// key. An empty map (no rows, or disabled) is normal on first boot.
+// Load returns the last confirmed status of every service, keyed by service key.
 func (s *Store) Load(ctx context.Context) (map[string]Entry, error) {
 	out := map[string]Entry{}
 	if s.db == nil {

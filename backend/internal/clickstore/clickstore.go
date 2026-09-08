@@ -1,8 +1,6 @@
-// Package clickstore persists per-site click counts in Postgres so
-// "조회수순" (sort by view count) reflects every visitor, not just the
-// browser doing the sorting. If DATABASE_URL isn't configured, Store
-// behaves as a no-op (mirrors the mailer/kakao "silently skip" pattern)
-// so the rest of the API keeps working without a database.
+// Package clickstore persists per-site click counts in Postgres. If
+// DATABASE_URL isn't configured, Store is a no-op so the rest of the API
+// keeps working without a database.
 package clickstore
 
 import (
@@ -14,8 +12,7 @@ type Store struct {
 	db *sql.DB // nil means disabled
 }
 
-// New wraps the shared DB connection (see internal/db). A nil db is valid
-// and puts the Store in disabled/no-op mode.
+// New wraps the shared DB connection. A nil db puts the Store in no-op mode.
 func New(db *sql.DB) (*Store, error) {
 	if db == nil {
 		return &Store{}, nil

@@ -1,6 +1,5 @@
-// Command backfill-incidents reconstructs the incident history from the
-// git trail of backend/data/status.json (the bot commits the old GitHub
-// Actions monitor left, ~2026-08-10 .. 2026-09-07). Run once.
+// Command backfill-incidents reconstructs the incident history from the git
+// trail of backend/data/status.json. Run once.
 //
 //	go run ./cmd/backfill-incidents               # dry run: print what it would insert
 //	go run ./cmd/backfill-incidents -commit       # insert into the incidents table
@@ -23,10 +22,10 @@ import (
 
 	"github.com/joho/godotenv"
 	"smu-server-status-viewer/backend/internal/academic"
-	"smu-server-status-viewer/backend/internal/apitext"
 	"smu-server-status-viewer/backend/internal/db"
 	"smu-server-status-viewer/backend/internal/embed"
 	"smu-server-status-viewer/backend/internal/incidentai"
+	incidentsvc "smu-server-status-viewer/backend/internal/incidents"
 	"smu-server-status-viewer/backend/internal/incidentstore"
 	"smu-server-status-viewer/backend/internal/services"
 )
@@ -49,7 +48,7 @@ func main() {
 	commit := flag.Bool("commit", false, "insert rows (default: dry run)")
 	analyze := flag.Bool("analyze", false, "also generate embedding + LLM verdict for each")
 	only := flag.String("only", "", "comma-separated service keys to keep (e.g. ECAMPUS,SUGANG); empty = all")
-	after := flag.String("after", "", "drop incidents that started before this date (YYYY-MM-DD); the 5s-timeout era before 2026-08-13 is unreliable")
+	after := flag.String("after", "", "drop incidents that started before this date (YYYY-MM-DD)")
 	flag.Parse()
 
 	var afterT time.Time
@@ -71,7 +70,7 @@ func main() {
 
 	_ = godotenv.Load()
 
-	// git 경로가 저장소 루트 기준이므로 어디서 실행하든 루트로 이동한다.
+	// git paths are relative to the repo root, so move there.
 	if root, err := exec.Command("git", "rev-parse", "--show-toplevel").Output(); err == nil {
 		_ = os.Chdir(strings.TrimSpace(string(root)))
 	}
@@ -141,7 +140,7 @@ func main() {
 			inserted++
 		}
 
-		// -analyze는 새로 넣은 것 + 아직 verdict 없는 기존 것 모두 처리(재실행 가능).
+		// -analyze covers both new rows and existing rows without a verdict.
 		if *analyze && needsVerdict(ctx, conn, id) {
 			if err := analyzeOne(ctx, store, id, in, tag); err != nil {
 				fmt.Fprintf(os.Stderr, "  #%d 분석 실패: %v\n", id, err)
@@ -217,14 +216,8 @@ func reconstruct() []reconstructed {
 }
 
 func analyzeOne(ctx context.Context, store *incidentstore.Store, id int64, in reconstructed, tag string) error {
-	siteName := apitext.SiteName(in.siteKey)
-	weekday := [...]string{"일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"}[in.startedAt.Weekday()]
-	symptom := "응답 없음"
-	if in.downStatus == "error" {
-		symptom = "오류 응답"
-	}
-	summary := fmt.Sprintf("%s, %s, %s %02d시 발생, %s, %s",
-		in.startedAt.Format("2006-01-02"), siteName, weekday, in.startedAt.Hour(), tag, symptom)
+	siteName := services.DisplayName(in.siteKey)
+	summary := incidentsvc.BuildSummary(siteName, in.downStatus, tag, in.startedAt)
 
 	vec, _ := embed.Embed(ctx, summary)
 	_ = store.SaveEnrichment(ctx, id, summary, vec)

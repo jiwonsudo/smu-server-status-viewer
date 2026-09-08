@@ -1,148 +1,61 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
-import axios from 'axios';
+import { useMemo } from 'react';
 import StatusBar from './statusbar';
 import Toast from './Toast';
-import { computeDisplayStatus } from '../lib/statusDetail';
-import { URL_ROOT } from '../lib/config';
+import CacheBadge from './CacheBadge';
+import { apiPost } from '../lib/api';
 import { SITE_INFOS } from '../lib/siteInfos';
+import { statusLevel } from '../lib/statusDetail';
+import { useStatusStream } from '../lib/useStatusStream';
+import { useNow, useFooterVisible, usePersistentSet } from '../lib/hooks';
 import { useToast } from '../lib/useToast';
 import text from '../lib/text';
 
-const DELAY_NOTICE_MS = 8 * 1000; // Render 콜드스타트 대응: 이 시간 이상 응답이 없으면 지연 문구 표시
-
 const PIN_STORAGE_KEY = 'smu-status-pins';
 
-function loadJSON(key, fallback) {
-  try {
-    const raw = window.localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : fallback;
-  } catch {
-    return fallback;
-  }
-}
+// Worst-status-first ordering. Lower = more urgent.
+const SEVERITY = { down: 0, slow: 1, ok: 2, loading: 2 };
 
 function StatusDashboard({ initialStatusData = {} }) {
-  const [statusData, setStatusData] = useState(initialStatusData);
-  const [isDelayed, setIsDelayed] = useState(false);
-  const [pins, setPins] = useState([]);
-  // null로 시작한다 — Date.now()를 렌더 중에 바로 부르면 SSR/하이드레이션
-  // 시점 값이 달라 cacheAgeSeconds 텍스트가 어긋나 hydration mismatch(#418)가
-  // 났다. null이면 두 쪽 다 "서버 확인 중..."으로 시작해 일치한다.
-  const [now, setNow] = useState(null);
-  const [nextUpdateAtMs, setNextUpdateAtMs] = useState(null);
-  const [footerVisible, setFooterVisible] = useState(false);
-
-  const siteInfos = useMemo(() => SITE_INFOS, []);
-  const delayTimerRef = useRef(null);
+  const { statusData, isDelayed, nextUpdateAtMs } = useStatusStream(initialStatusData);
+  const [pins, togglePinKey] = usePersistentSet(PIN_STORAGE_KEY);
+  const now = useNow();
+  const footerVisible = useFooterVisible();
   const [toastMessage, showToast] = useToast();
 
-  // localStorage는 브라우저 전용이라 마운트 후에만 읽는다(hydration mismatch 방지).
-  useEffect(() => {
-    setPins(loadJSON(PIN_STORAGE_KEY, []));
-  }, []);
-
-  // 우측 하단 "N초 전 확인됨" 배지가 1초마다 갱신되도록 하는 틱 — 새 요청은 안 보낸다.
-  useEffect(() => {
-    setNow(Date.now());
-    const tick = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(tick);
-  }, []);
-
-  // 배지가 position:fixed라 스크롤을 맨 밑까지 내리면 푸터를 가리는 문제가
-  // 있었다 — 푸터가 화면에 보이기 시작하면 배지를 슬쩍 숨긴다.
-  useEffect(() => {
-    const footer = document.querySelector('footer');
-    if (!footer) return;
-    const observer = new IntersectionObserver(([entry]) => setFooterVisible(entry.isIntersecting));
-    observer.observe(footer);
-    return () => observer.disconnect();
-  }, []);
-
-  // 상태는 폴링하지 않고 백엔드가 갱신될 때마다 밀어주는 SSE를 구독한다.
-  // 시계가 백엔드 하나뿐이라 "N초 전" 표시가 어긋날 일이 없다.
-  useEffect(() => {
-    setIsDelayed(false);
-    delayTimerRef.current = setTimeout(() => setIsDelayed(true), DELAY_NOTICE_MS);
-
-    const source = new EventSource(`${URL_ROOT}/status/stream`);
-
-    source.onmessage = (event) => {
-      clearTimeout(delayTimerRef.current);
-      setIsDelayed(false);
-
-      let payload;
-      try {
-        payload = JSON.parse(event.data);
-      } catch {
-        return;
-      }
-
-      const nextEntries = {};
-      for (const [endpoint, result] of Object.entries(payload.sites || {})) {
-        nextEntries[endpoint] = computeDisplayStatus(endpoint, result);
-      }
-      setStatusData((prevData) => ({ ...prevData, ...nextEntries }));
-
-      if (payload.nextUpdateAt) {
-        setNextUpdateAtMs(new Date(payload.nextUpdateAt).getTime());
-      }
-    };
-
-    return () => {
-      clearTimeout(delayTimerRef.current);
-      source.close();
-    };
-  }, []);
-
   const togglePin = (endpoint, siteTitle) => {
-    const isPinned = pins.includes(endpoint);
-    const next = isPinned ? pins.filter((key) => key !== endpoint) : [...pins, endpoint];
-    setPins(next);
-    try {
-      window.localStorage.setItem(PIN_STORAGE_KEY, JSON.stringify(next));
-    } catch {
-      // localStorage 접근 불가(프라이빗 모드 등)해도 기능은 세션 내에서 그대로 동작
-    }
-    showToast(isPinned ? text.toast.pinRemoved(siteTitle) : text.toast.pinAdded(siteTitle));
+    const wasPinned = pins.includes(endpoint);
+    togglePinKey(endpoint);
+    showToast(wasPinned ? text.toast.pinRemoved(siteTitle) : text.toast.pinAdded(siteTitle));
   };
 
-  // 링크 클릭 수는 백엔드(Postgres)에 계속 집계해 둔다 — 화면엔 안 쓰지만
-  // 개인정보처리방침에 고지된 집계 데이터.
+  // Link click counts are aggregated on the backend (disclosed in the
+  // privacy policy); not shown in the UI.
   const recordVisit = (siteKey) => {
-    axios.post(`${URL_ROOT}/clicks/${siteKey}`).catch(() => {});
+    apiPost(`/clicks/${siteKey}`).catch(() => {});
   };
 
-  // 정렬은 고정 우선순위: 즐겨찾기 → 상태 나쁜 순(오류 → 느림 → 정상) → 가나다순.
-  // 문제가 있는 사이트를 먼저 보게 하는 게 목적.
+  // Sort: pinned → worst status → 가나다순.
   const sortedSiteInfos = useMemo(() => {
-    const severity = (endpoint) => {
-      const detail = statusData[endpoint]?.detail;
-      if (!detail) return 2; // 아직 확인 중
-      if (!detail.ok) return 0; // 접속 오류
-      if (detail.slow) return 1; // 느림
-      return 2; // 정상
-    };
-    return [...siteInfos].sort((a, b) => {
+    return [...SITE_INFOS].sort((a, b) => {
       const ap = pins.includes(a.endpoint);
       const bp = pins.includes(b.endpoint);
       if (ap !== bp) return ap ? -1 : 1;
 
-      const sa = severity(a.endpoint);
-      const sb = severity(b.endpoint);
+      const sa = SEVERITY[statusLevel(statusData[a.endpoint]?.detail)];
+      const sb = SEVERITY[statusLevel(statusData[b.endpoint]?.detail)];
       if (sa !== sb) return sa - sb;
 
       return a.title.localeCompare(b.title, 'ko');
     });
-  }, [siteInfos, pins, statusData]);
+  }, [pins, statusData]);
 
-  // 배지에 보여줄 "서버 캐시가 몇 초 전 것인지" — 사이트별 checkedAt 중 최신값 기준.
   const latestCheckedAtMs = useMemo(() => {
-    const timestamps = Object.values(statusData)
+    const times = Object.values(statusData)
       .map((entry) => (entry?.checkedAt ? new Date(entry.checkedAt).getTime() : null))
       .filter((ms) => typeof ms === 'number' && !Number.isNaN(ms));
-    return timestamps.length ? Math.max(...timestamps) : null;
+    return times.length ? Math.max(...times) : null;
   }, [statusData]);
 
   const cacheAgeSeconds =
@@ -155,40 +68,33 @@ function StatusDashboard({ initialStatusData = {} }) {
       <Toast message={toastMessage} />
 
       <div className="flex flex-col gap-4">
-        {sortedSiteInfos.map((siteInfo) => (
-          <StatusBar
-            key={siteInfo.endpoint}
-            title={siteInfo.title}
-            url={siteInfo.url}
-            href={siteInfo.url}
-            statusMsg={statusData[siteInfo.endpoint]?.statusMsg || (isDelayed ? text.dashboard.delayedStatus : text.dashboard.checkingStatus)}
-            statusColor={statusData[siteInfo.endpoint]?.statusColor || '#b45309'}
-            responseTime={statusData[siteInfo.endpoint]?.responseTime || (isDelayed ? text.dashboard.delayedResponseTime : text.dashboard.checkingResponseTime)}
-            detail={statusData[siteInfo.endpoint]?.detail}
-            siteKey={siteInfo.siteKey}
-            pinned={pins.includes(siteInfo.endpoint)}
-            onTogglePin={() => togglePin(siteInfo.endpoint, siteInfo.title)}
-            onVisit={() => recordVisit(siteInfo.siteKey)}
-          />
-        ))}
+        {sortedSiteInfos.map((siteInfo) => {
+          const entry = statusData[siteInfo.endpoint];
+          return (
+            <StatusBar
+              key={siteInfo.endpoint}
+              title={siteInfo.title}
+              url={siteInfo.url}
+              href={siteInfo.url}
+              statusMsg={entry?.statusMsg || (isDelayed ? text.dashboard.delayedStatus : text.dashboard.checkingStatus)}
+              responseTime={
+                entry?.responseTime || (isDelayed ? text.dashboard.delayedResponseTime : text.dashboard.checkingResponseTime)
+              }
+              detail={entry?.detail}
+              siteKey={siteInfo.siteKey}
+              pinned={pins.includes(siteInfo.endpoint)}
+              onTogglePin={() => togglePin(siteInfo.endpoint, siteInfo.title)}
+              onVisit={() => recordVisit(siteInfo.siteKey)}
+            />
+          );
+        })}
       </div>
 
-      <div
-        className={`fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-30 flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground shadow-sm transition-opacity duration-200 ${
-          footerVisible ? 'pointer-events-none opacity-0' : 'opacity-100'
-        }`}
-        aria-live="off"
-      >
-        <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${cacheAgeSeconds == null ? 'bg-muted-foreground/40' : 'bg-success'}`} />
-        {cacheAgeSeconds == null ? (
-          text.dashboard.cacheChecking
-        ) : (
-          <span>
-            {text.dashboard.cacheAgeSuffix(cacheAgeSeconds)}
-            {secondsUntilNextUpdate != null && ` · ${text.dashboard.nextUpdateSuffix(secondsUntilNextUpdate)}`}
-          </span>
-        )}
-      </div>
+      <CacheBadge
+        ageSeconds={cacheAgeSeconds}
+        secondsUntilNextUpdate={secondsUntilNextUpdate}
+        hidden={footerVisible}
+      />
     </div>
   );
 }

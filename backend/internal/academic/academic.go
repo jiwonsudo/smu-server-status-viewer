@@ -1,13 +1,7 @@
 // Package academic maps a calendar date to a coarse SMU academic-term
 // context ("개강주" / "시험기간" / "평시"). It's a heuristic, not a real
-// academic calendar: the exact weeks shift year to year, but outages
-// cluster hard around the start of each semester and around exams, so even
-// an approximate tag is a useful signal for the incident analysis.
-//
-// Semesters (서울캠 기준, 대략):
-//
-//	1학기 개강 ~ 3월 첫 주,  중간고사 ~ 4월 3주, 기말고사 ~ 6월 3주
-//	2학기 개강 ~ 9월 첫 주,  중간고사 ~ 10월 3주, 기말고사 ~ 12월 3주
+// academic calendar, but outages cluster around semester starts and exams so
+// even an approximate tag is a useful signal for incident analysis.
 package academic
 
 import "time"
