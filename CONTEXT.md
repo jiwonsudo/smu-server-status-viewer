@@ -83,6 +83,53 @@
 - 초기 데이터: 백필 없이 "지금부터 쌓기". 첫 몇 건은 history 부족으로 "판단보류"가
   자주 나올 것(프롬프트가 그렇게 지시).
 
+## 2026-09-08 — 평상시 안정성 요약 + blip 필터 + AI 호출 가드레일
+
+기존 AI는 "장애 확정 + 90초 지속"일 때만 호출돼서, 정상/느린 서버에서는 모달에
+템플릿 한 줄("기록된 접속 오류 N건 · 대체로 M분 내 정상화")만 나왔다. 이제 모든
+상태에서 "지금 접속해도 될까요?" 요약을 보여준다. 설계 원칙(요청 경로에서 LLM
+호출 안 함)은 그대로 — 지표는 결정론적으로 계산하고 문장만 캐시한다.
+
+- **blip 필터** (`incidentstore.BlipThresholdSeconds = 60`): `Resolve`가 복구까지
+  60초 미만이면 `incidents.blip = TRUE`로 마킹. `Stats`/`Recent`가 `blip = FALSE`만
+  집계 → 15초 깜빡임이 median·건수를 왜곡하지 않음. 0분 표기도 프론트에서
+  "1분 미만"으로.
+- **결정론적 스코어카드** (`internal/servicehealth`, 순수 함수 + 테스트):
+  `incidentstore.Stats`(7d/30d 건수·다운분, 첫/마지막 장애 시각 추가) →
+  관측일수, 7d/30d 가동률(관측 기간이 짧으면 창을 그만큼 축소, <1h면 -1),
+  마지막 장애 경과일, level(`solid`/`mostly-stable`/`shaky`/`down`).
+- **LLM 요약문** (`incidentai.Summarize`, `gpt-4o-mini` 1콜): 스코어카드 수치를
+  2~3문장으로 다듬기만. grounding 규칙 = 판정 프롬프트와 동일(수치 밖 사실 금지).
+- **캐시**: `service_summaries` 테이블(site_key PK, scorecard JSONB, inputs_hash,
+  blurb, first_seen_at). `internal/incidents.RefreshSummary`가 스코어카드 계산 →
+  `InputsHash`(거친 필드만: level·건수·가동률·경과일·복구중앙값. 응답시간/일 미만
+  나이 제외) 변화 or blurb 24h 초과 or blurb 없음일 때만 LLM 재호출.
+- **트리거**: `cmd/server`가 (1) 부팅 30초 후 + 20분마다 `RefreshAllSummaries`,
+  (2) 상태 전환 시 해당 서비스 `RefreshSummary`. 전부 goroutine, 요청 경로 아님.
+- **AI 호출 가드레일** (`internal/incidents`):
+  - **월 지출 상한 (하드)**: `incidentstore.ConsumeAIBudget`가 매 OpenAI 호출 전
+    `ai_usage (month, kind, calls)` 카운터를 원자적으로 증가시키고 한도 초과면
+    거부. DB 카운터라 재시작 루프로 리셋 안 됨. 한도: verdict 700 / blurb 1200 /
+    embed 8000 (월). gpt-4o-mini ≈ $0.0004/콜 → 최악 월 ~$0.76 + 임베딩 ~$0.02
+    ⇒ **월 $1 미만**. 호출 실패 시 `RefundAIBudget`로 환불.
+  - 요약문 LLM: 위 월 상한 + 프로세스-일 `dailyBlurbBudget = 50` (인메모리 스무딩).
+  - 장애 판정 LLM: `enrich`에서 `Flapping24hCount >= 4`면 규칙 기반
+    "판단보류"(`verdict_model = "rule:flapping"`)로 저장하고 LLM 생략;
+    `LastVerdictAt`이 30분(`reanalyzeCooldown`) 이내면 생략. 임베딩 호출은 이
+    가드들 통과 후로 미룸(플래핑 시 낭비 방지).
+  - `incidentai.Enabled()`로 키 없으면 예산 소비 자체를 건너뜀.
+- **API**: `GET /api/incidents/{site}/analysis` 응답에 `summary`(scorecard+blurb)
+  추가. 장애 이력이 아예 없어도 summary만 있으면 `hasData: true`.
+- **프론트**: `AiAnalysisSection`의 `StabilityBlock`이 모든 상태에서 렌더 —
+  blurb 있으면 우선, 없으면 `text.js`의 `scorecardSentence`(결정론적 문장) 폴백.
+  문구 전부 `text.js`의 `aiAnalysis`.
+- **RAG 아님**: 임베딩은 여전히 저장만 하고 retrieval에 안 씀. 스코어카드는 SQL
+  집계 기반 grounding이지 벡터 검색이 아니다. pgvector 승격은 코퍼스 커진 뒤 별도.
+- **⚠️ DB 스키마**: `incidents.blip` 컬럼 + `service_summaries` 테이블은
+  `incidentstore.New`의 `CREATE TABLE IF NOT EXISTS` / `ALTER TABLE ... ADD COLUMN
+  IF NOT EXISTS`로 자동 마이그레이션. 기존 행의 `blip`은 FALSE(과거 0분 건은 그대로
+  남지만 신규만 필터됨).
+
 ## 모니터링 아키텍처 변경 (핵심, 2026-08 — 아래 일부는 위 2026-09-07 업데이트로 대체됨)
 
 기존엔 Express 서버 안에서 `node-cron`으로 5분마다 자체 점검했는데, Render 무료 티어는 트래픽 없으면 프로세스가 잠들어서 그 안의 cron도 같이 멈추는 문제가 있었음(카톡 알림 자동화를 얹어도 서버가 자고 있으면 못 감지). 그래서 모니터링을 서버에서 완전히 분리함. (아래 "백엔드: Express → Go" 절에서 실제 파일은 Go로 다시 바뀌었지만, 이 분리 구조 자체는 그대로 유지됨.)

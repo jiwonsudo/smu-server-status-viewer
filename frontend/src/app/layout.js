@@ -29,9 +29,9 @@ export const metadata = {
     title: shareTitle,
     description,
   },
-  icons: {
-    icon: '/smuon_black.webp',
-  },
+  // Favicon / tab icon / Google search icon come from the app-dir file
+  // convention: app/favicon.ico, app/icon.png, app/apple-icon.png (generated
+  // from src/assets/logo.webp). No explicit `icons` field needed.
   manifest: '/manifest.json',
 };
 
