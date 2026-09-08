@@ -43,7 +43,9 @@ type Incident struct {
 }
 
 // Stats is the historical context handed to the LLM and returned to the
-// frontend. All windows are "all recorded incidents for this service".
+// frontend. Blips (see BlipThresholdSeconds) are excluded everywhere.
+// Count/Median/etc. cover all recorded incidents; the 7d/30d fields are
+// rolling windows relative to now.
 type Stats struct {
 	Count             int `json:"count"`
 	ResolvedCount     int `json:"resolvedCount"`
@@ -56,6 +58,13 @@ type Stats struct {
 	SameContextCount  int `json:"sameContextCount"` // incidents with the same context_tag
 	SameContextMedian int `json:"sameContextMedian"`
 	Flapping24hCount  int `json:"flapping24hCount"` // incidents for this service in the last 24h
+
+	Incidents7d     int        `json:"incidents7d"`
+	Incidents30d    int        `json:"incidents30d"`
+	DownMinutes7d   int        `json:"downMinutes7d"` // summed outage minutes in the last 7 days
+	DownMinutes30d  int        `json:"downMinutes30d"`
+	LastIncidentAt  *time.Time `json:"lastIncidentAt,omitempty"`
+	FirstIncidentAt *time.Time `json:"firstIncidentAt,omitempty"`
 }
 
 func New(db *sql.DB) (*Store, error) {
@@ -84,6 +93,36 @@ func New(db *sql.DB) (*Store, error) {
 		);
 		CREATE INDEX IF NOT EXISTS incidents_service_started
 			ON incidents (service_key, started_at DESC);
+
+		-- blip: an outage that recovered within blipThresholdSeconds. Kept as a
+		-- row for the raw trail but excluded from stats and the history list so
+		-- one flaky 15s check doesn't distort "median recovery" or the count.
+		ALTER TABLE incidents ADD COLUMN IF NOT EXISTS blip BOOLEAN NOT NULL DEFAULT FALSE;
+
+		-- One cached "current stability" summary per service. scorecard is the
+		-- deterministic metrics (source of truth); blurb is the optional LLM
+		-- phrasing of those same numbers. Recomputed on a timer + on transition;
+		-- the LLM only re-runs when inputs_hash changes (see internal/incidents).
+		CREATE TABLE IF NOT EXISTS service_summaries (
+			site_key      TEXT PRIMARY KEY,
+			first_seen_at TIMESTAMPTZ NOT NULL,
+			scorecard     JSONB NOT NULL,
+			inputs_hash   TEXT NOT NULL DEFAULT '',
+			blurb         TEXT NOT NULL DEFAULT '',
+			blurb_model   TEXT NOT NULL DEFAULT '',
+			blurb_at      TIMESTAMPTZ,
+			generated_at  TIMESTAMPTZ NOT NULL
+		);
+
+		-- Per-calendar-month LLM call counters, one row per (month, kind). The
+		-- hard spend ceiling: incidents.go consults this before every OpenAI
+		-- call. In the DB (not memory) so a restart loop can't reset it.
+		CREATE TABLE IF NOT EXISTS ai_usage (
+			month TEXT NOT NULL,
+			kind  TEXT NOT NULL,
+			calls INT  NOT NULL DEFAULT 0,
+			PRIMARY KEY (month, kind)
+		);
 	`
 	if _, err := db.Exec(schema); err != nil {
 		return nil, err
@@ -108,6 +147,10 @@ func (s *Store) Open(ctx context.Context, serviceKey, siteKey, downStatus, conte
 	return id, err
 }
 
+// BlipThresholdSeconds is the recovery time below which an outage is filed as
+// a blip: recorded, but kept out of stats and the "recent outages" list.
+const BlipThresholdSeconds = 60
+
 // Resolve closes the most recent still-open incident for serviceKey.
 func (s *Store) Resolve(ctx context.Context, serviceKey string, resolvedAt time.Time) error {
 	if s.db == nil {
@@ -116,14 +159,15 @@ func (s *Store) Resolve(ctx context.Context, serviceKey string, resolvedAt time.
 	_, err := s.db.ExecContext(ctx, `
 		UPDATE incidents
 		SET resolved_at = $2,
-		    duration_minutes = GREATEST(0, ROUND(EXTRACT(EPOCH FROM ($2 - started_at)) / 60)::int)
+		    duration_minutes = GREATEST(0, ROUND(EXTRACT(EPOCH FROM ($2 - started_at)) / 60)::int),
+		    blip = EXTRACT(EPOCH FROM ($2 - started_at)) < $3
 		WHERE id = (
 			SELECT id FROM incidents
 			WHERE service_key = $1 AND resolved_at IS NULL
 			ORDER BY started_at DESC
 			LIMIT 1
 		)
-	`, serviceKey, resolvedAt)
+	`, serviceKey, resolvedAt, BlipThresholdSeconds)
 	return err
 }
 
@@ -219,7 +263,7 @@ func (s *Store) Recent(ctx context.Context, siteKey string, limit int) ([]Recent
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT started_at, resolved_at, duration_minutes, down_status, COALESCE(verdict, '')
 		FROM incidents
-		WHERE site_key = $1
+		WHERE site_key = $1 AND blip = FALSE
 		ORDER BY started_at DESC
 		LIMIT $2
 	`, siteKey, limit)
@@ -252,7 +296,7 @@ func (s *Store) Stats(ctx context.Context, serviceKey string, now time.Time) (St
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT started_at, resolved_at, duration_minutes, COALESCE(context_tag, '')
 		FROM incidents
-		WHERE service_key = $1 AND started_at < $2
+		WHERE service_key = $1 AND started_at < $2 AND blip = FALSE
 		ORDER BY started_at
 	`, serviceKey, now)
 	if err != nil {
@@ -274,14 +318,32 @@ func (s *Store) Stats(ctx context.Context, serviceKey string, now time.Time) (St
 			return st, err
 		}
 		st.Count++
-		if now.Sub(startedAt) <= 24*time.Hour {
+		sa := startedAt
+		if st.FirstIncidentAt == nil {
+			st.FirstIncidentAt = &sa
+		}
+		st.LastIncidentAt = &sa
+		age := now.Sub(startedAt)
+		if age <= 24*time.Hour {
 			st.Flapping24hCount++
+		}
+		if age <= 7*24*time.Hour {
+			st.Incidents7d++
+		}
+		if age <= 30*24*time.Hour {
+			st.Incidents30d++
 		}
 		if !dur.Valid {
 			continue
 		}
 		st.ResolvedCount++
 		d := int(dur.Int64)
+		if age <= 7*24*time.Hour {
+			st.DownMinutes7d += d
+		}
+		if age <= 30*24*time.Hour {
+			st.DownMinutes30d += d
+		}
 		all = append(all, d)
 		if hourDiff(startedAt.Hour(), nowHour) <= 1 {
 			st.SameHourCount++
@@ -304,6 +366,119 @@ func (s *Store) Stats(ctx context.Context, serviceKey string, now time.Time) (St
 	st.SameHourMedian = median(sameHour)
 	st.SameContextMedian = median(sameCtx)
 	return st, nil
+}
+
+// Summary is the cached per-service stability summary. Scorecard is opaque
+// JSON here (shaped by internal/servicehealth) so incidentstore stays free of
+// that dependency.
+type Summary struct {
+	SiteKey     string          `json:"siteKey"`
+	FirstSeenAt time.Time       `json:"firstSeenAt"`
+	Scorecard   json.RawMessage `json:"scorecard"`
+	InputsHash  string          `json:"-"`
+	Blurb       string          `json:"blurb,omitempty"`
+	BlurbModel  string          `json:"blurbModel,omitempty"`
+	BlurbAt     *time.Time      `json:"blurbAt,omitempty"`
+	GeneratedAt time.Time       `json:"generatedAt"`
+}
+
+// GetSummary returns the cached summary for siteKey, or (nil, nil) if none /
+// disabled.
+func (s *Store) GetSummary(ctx context.Context, siteKey string) (*Summary, error) {
+	if s.db == nil {
+		return nil, nil
+	}
+	var sm Summary
+	var scorecard []byte
+	err := s.db.QueryRowContext(ctx, `
+		SELECT site_key, first_seen_at, scorecard, inputs_hash, blurb, blurb_model, blurb_at, generated_at
+		FROM service_summaries WHERE site_key = $1
+	`, siteKey).Scan(&sm.SiteKey, &sm.FirstSeenAt, &scorecard, &sm.InputsHash,
+		&sm.Blurb, &sm.BlurbModel, &sm.BlurbAt, &sm.GeneratedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	sm.Scorecard = scorecard
+	return &sm, nil
+}
+
+// SaveSummary upserts the cached summary. first_seen_at is set once (on the
+// first write, or seeded by the caller) and never overwritten.
+func (s *Store) SaveSummary(ctx context.Context, sm Summary) error {
+	if s.db == nil {
+		return nil
+	}
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO service_summaries
+			(site_key, first_seen_at, scorecard, inputs_hash, blurb, blurb_model, blurb_at, generated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		ON CONFLICT (site_key) DO UPDATE SET
+			scorecard = EXCLUDED.scorecard,
+			inputs_hash = EXCLUDED.inputs_hash,
+			blurb = EXCLUDED.blurb,
+			blurb_model = EXCLUDED.blurb_model,
+			blurb_at = EXCLUDED.blurb_at,
+			generated_at = EXCLUDED.generated_at
+	`, sm.SiteKey, sm.FirstSeenAt, []byte(sm.Scorecard), sm.InputsHash,
+		sm.Blurb, sm.BlurbModel, sm.BlurbAt, sm.GeneratedAt)
+	return err
+}
+
+// LastVerdictAt returns the most recent verdict_at for serviceKey, ignoring
+// incident excludeID. Used to throttle auto re-analysis of a flapping service
+// (the manual reanalyze endpoint passes its own id so it's never blocked).
+func (s *Store) LastVerdictAt(ctx context.Context, serviceKey string, excludeID int64) (*time.Time, error) {
+	if s.db == nil {
+		return nil, nil
+	}
+	var at sql.NullTime
+	err := s.db.QueryRowContext(ctx, `
+		SELECT MAX(verdict_at) FROM incidents WHERE service_key = $1 AND id <> $2
+	`, serviceKey, excludeID).Scan(&at)
+	if err != nil || !at.Valid {
+		return nil, err
+	}
+	return &at.Time, nil
+}
+
+// ConsumeAIBudget atomically increments this month's counter for kind and
+// reports whether the call stays within monthlyLimit. A nil DB (no-op store)
+// always allows — the ceiling needs the DB to be enforced, and the incidents
+// feature is otherwise disabled without one anyway.
+func (s *Store) ConsumeAIBudget(ctx context.Context, kind string, monthlyLimit int) (bool, error) {
+	if s.db == nil {
+		return true, nil
+	}
+	month := time.Now().UTC().Format("2006-01")
+	var calls int
+	err := s.db.QueryRowContext(ctx, `
+		INSERT INTO ai_usage (month, kind, calls) VALUES ($1, $2, 1)
+		ON CONFLICT (month, kind) DO UPDATE SET calls = ai_usage.calls + 1
+		WHERE ai_usage.calls < $3
+		RETURNING calls
+	`, month, kind, monthlyLimit).Scan(&calls)
+	if err == sql.ErrNoRows {
+		return false, nil // limit reached
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// RefundAIBudget decrements this month's counter for kind. Call it when a
+// consumed unit wasn't actually spent (no API key, etc.).
+func (s *Store) RefundAIBudget(ctx context.Context, kind string) {
+	if s.db == nil {
+		return
+	}
+	month := time.Now().UTC().Format("2006-01")
+	_, _ = s.db.ExecContext(ctx, `
+		UPDATE ai_usage SET calls = GREATEST(0, calls - 1) WHERE month = $1 AND kind = $2
+	`, month, kind)
 }
 
 // hourDiff is the clock-hour distance between a and b, wrapping at 24.

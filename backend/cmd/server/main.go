@@ -64,7 +64,7 @@ func main() {
 	if !incidentStore.Enabled() {
 		log.Println("[incidents] DATABASE_URL이 없어 장애 이력/AI 분석을 비활성화합니다.")
 	}
-	incidentSvc := incidents.New(incidentStore)
+	incidentSvc := incidents.New(incidentStore, statusCache)
 
 	monitor := statemonitor.New(statemonitor.Config{
 		Cache: statusCache,
@@ -72,12 +72,34 @@ func main() {
 		OnTransition: func(ctx context.Context, t statemonitor.Transition) {
 			if t.CurrentStatus == "ok" {
 				incidentSvc.OnRecovered(ctx, t.ServiceKey, t.At)
-				return
+			} else {
+				incidentSvc.OnDown(ctx, t.ServiceKey, t.SiteKey, t.CurrentStatus, t.At)
 			}
-			incidentSvc.OnDown(ctx, t.ServiceKey, t.SiteKey, t.CurrentStatus, t.At)
+			// Refresh this service's stability summary off the hot path so the
+			// scorecard and blurb reflect the transition.
+			go func() {
+				rc, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+				defer cancel()
+				if err := incidentSvc.RefreshSummary(rc, t.ServiceKey, t.SiteKey); err != nil {
+					log.Printf("[incidents] %s 전환 후 요약 갱신 실패: %v", t.SiteKey, err)
+				}
+			}()
 		},
 	})
 	monitor.Start(context.Background())
+
+	// Periodic stability-summary refresh: keeps "관측 N일째" / uptime windows
+	// current even for services that never transition. The LLM blurb inside
+	// only re-runs when the coarse numbers move (see internal/incidents).
+	go func() {
+		time.Sleep(30 * time.Second) // let the first status cache cycle land
+		incidentSvc.RefreshAllSummaries(context.Background())
+		t := time.NewTicker(20 * time.Minute)
+		defer t.Stop()
+		for range t.C {
+			incidentSvc.RefreshAllSummaries(context.Background())
+		}
+	}()
 
 	handler := httpapi.New(httpapi.Config{
 		Cache:         statusCache,
