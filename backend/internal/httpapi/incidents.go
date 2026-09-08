@@ -19,6 +19,7 @@ type incidentAnalysisResponse struct {
 	Incident        *incidentstore.Incident        `json:"incident,omitempty"`
 	History         *incidentstore.Stats           `json:"history,omitempty"`
 	Recent          []incidentstore.RecentIncident `json:"recent,omitempty"`
+	Summary         *incidentstore.Summary         `json:"summary,omitempty"`
 }
 
 func (h *handlers) incidentAnalysis(w http.ResponseWriter, r *http.Request) {
@@ -35,19 +36,26 @@ func (h *handlers) incidentAnalysis(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+
+	resp := incidentAnalysisResponse{}
+	if summary, err := store.GetSummary(r.Context(), site); err == nil && summary != nil {
+		resp.Summary = summary
+	}
+
 	if latest == nil {
-		writeJSON(w, http.StatusOK, incidentAnalysisResponse{HasData: false})
+		// No outages recorded — still a valid answer when a summary exists
+		// ("rock solid since monitoring began").
+		resp.HasData = resp.Summary != nil
+		writeJSON(w, http.StatusOK, resp)
 		return
 	}
 
 	// Empty verdict + recent start = still analyzing; empty verdict + old
 	// start = analysis failed or no key, so drop pending and let the
 	// frontend skip the verdict card.
-	resp := incidentAnalysisResponse{
-		HasData:         true,
-		AnalysisPending: latest.Verdict == "" && time.Since(latest.StartedAt) < 10*time.Minute,
-		Incident:        latest,
-	}
+	resp.HasData = true
+	resp.AnalysisPending = latest.Verdict == "" && time.Since(latest.StartedAt) < 10*time.Minute
+	resp.Incident = latest
 	if stats, err := store.Stats(r.Context(), latest.ServiceKey, time.Now()); err == nil {
 		resp.History = &stats
 	}

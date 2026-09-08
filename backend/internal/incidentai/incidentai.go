@@ -25,6 +25,10 @@ const Model = "gpt-4o-mini"
 // ErrDisabled means OPENAI_API_KEY isn't configured.
 var ErrDisabled = errors.New("incidentai: OPENAI_API_KEY not set")
 
+// Enabled reports whether an OpenAI key is configured. Callers check this
+// before consuming a spend-budget unit so a keyless deploy doesn't churn it.
+func Enabled() bool { return os.Getenv("OPENAI_API_KEY") != "" }
+
 // Input is everything the prompt needs. History* fields come from
 // incidentstore.Stats.
 type Input struct {
@@ -136,6 +140,111 @@ func parseVerdict(s string) (Verdict, error) {
 		v.Confidence = 1
 	}
 	return v, nil
+}
+
+// --- 평상시 요약문 (service stability blurb) ---
+
+// SummaryInput is the grounded number set for the "current stability" blurb.
+// The LLM only rephrases these; it must not introduce anything else.
+type SummaryInput struct {
+	SiteName            string
+	Level               string // solid | mostly-stable | shaky | down
+	ObservedDays        int
+	Incidents7d         int
+	Incidents30d        int
+	Uptime30dPercent    float64 // -1 if not yet observable
+	LastIncidentDaysAgo int     // -1 if never
+	MedianRecoveryMin   int
+	CurrentStatus       string // ok | slow | down | unknown
+	CurrentResponseMs   int
+}
+
+const summarySystemPrompt = `너는 상명대학교 웹서비스 상태 뷰어의 안내 문구 작성기다.
+주어진 수치만 근거로, 지금 이 서비스에 접속하려는 학생에게 도움이 되는 한국어 안내를 2~3문장으로 써라.
+
+규칙:
+- 수치에 없는 사실(원인, 서버 내부 상태, 앞으로의 예측 확률 등)을 지어내지 마라.
+- "지금 상태 → 최근 안정성 → 실용적 조언" 순서로. 조언은 상태에 맞게: 정상이면 "바로 접속해도 됩니다" 류, 느리면 "로그인·수강신청 등 시간 민감한 작업은 여유를 두세요" 류, 장애면 "잠시 후 다시 시도하세요" 류.
+- 관측 기간이 짧으면(observedDays가 작으면) "관측 N일째"임을 밝히고 단정하지 마라.
+- 퍼센트 수치는 소수점 없이. 딱딱한 통계 나열이 아니라 사람이 읽는 문장으로.
+- JSON이나 마크다운 없이 문장만 출력.`
+
+// Summarize returns the natural-language stability blurb, or ErrDisabled if
+// no key. One short chat call.
+func Summarize(ctx context.Context, in SummaryInput) (string, error) {
+	key := os.Getenv("OPENAI_API_KEY")
+	if key == "" {
+		return "", ErrDisabled
+	}
+
+	raw, err := httpx.PostJSON(ctx, apiURL,
+		map[string]string{"Authorization": "Bearer " + key}, 30*time.Second,
+		map[string]any{
+			"model":       Model,
+			"max_tokens":  260,
+			"temperature": 0.4,
+			"messages": []any{
+				map[string]any{"role": "system", "content": summarySystemPrompt},
+				map[string]any{"role": "user", "content": buildSummaryPrompt(in)},
+			},
+		})
+	if err != nil {
+		return "", err
+	}
+
+	var parsed struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return "", err
+	}
+	if len(parsed.Choices) == 0 {
+		return "", fmt.Errorf("openai returned no choices")
+	}
+	return strings.TrimSpace(parsed.Choices[0].Message.Content), nil
+}
+
+func buildSummaryPrompt(in SummaryInput) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "- 서비스: %s\n", in.SiteName)
+	fmt.Fprintf(&b, "- 안정성 등급(내부 판정): %s\n", in.Level)
+	fmt.Fprintf(&b, "- 관측 기간: %d일\n", in.ObservedDays)
+	fmt.Fprintf(&b, "- 현재 상태: %s", currentStatusKo(in.CurrentStatus))
+	if in.CurrentStatus == "slow" && in.CurrentResponseMs > 0 {
+		fmt.Fprintf(&b, " (응답 %dms)", in.CurrentResponseMs)
+	}
+	b.WriteByte('\n')
+	fmt.Fprintf(&b, "- 최근 7일 접속 오류: %d건\n", in.Incidents7d)
+	fmt.Fprintf(&b, "- 최근 30일 접속 오류: %d건\n", in.Incidents30d)
+	if in.Uptime30dPercent >= 0 {
+		fmt.Fprintf(&b, "- 최근 30일 정상 접속 비율: 약 %.0f%%\n", in.Uptime30dPercent)
+	}
+	if in.LastIncidentDaysAgo >= 0 {
+		fmt.Fprintf(&b, "- 마지막 접속 오류: %d일 전\n", in.LastIncidentDaysAgo)
+	} else {
+		fmt.Fprintf(&b, "- 마지막 접속 오류: 관측 이후 없음\n")
+	}
+	if in.MedianRecoveryMin > 0 {
+		fmt.Fprintf(&b, "- 과거 오류의 평소 복구 시간(중앙값): %d분\n", in.MedianRecoveryMin)
+	}
+	return b.String()
+}
+
+func currentStatusKo(s string) string {
+	switch s {
+	case "ok":
+		return "정상"
+	case "slow":
+		return "정상이지만 느림"
+	case "down":
+		return "접속 오류"
+	default:
+		return "확인 중"
+	}
 }
 
 func buildUserPrompt(in Input) string {
