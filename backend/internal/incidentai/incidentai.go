@@ -148,6 +148,7 @@ func parseVerdict(s string) (Verdict, error) {
 // The LLM only rephrases these; it must not introduce anything else.
 type SummaryInput struct {
 	SiteName            string
+	Purpose             string // 이 서비스로 학생이 하는 일 (services.Service.Purpose)
 	Level               string // solid | mostly-stable | shaky | down
 	ObservedDays        int
 	Incidents7d         int
@@ -159,15 +160,16 @@ type SummaryInput struct {
 	CurrentResponseMs   int
 }
 
-const summarySystemPrompt = `너는 상명대학교 웹서비스 상태 뷰어의 안내 문구 작성기다.
-주어진 수치만 근거로, 지금 이 서비스에 접속하려는 학생에게 도움이 되는 한국어 안내를 2~3문장으로 써라.
+const summarySystemPrompt = `너는 상명대학교 웹서비스 "서버 안정성 확인" 문구 작성기다.
+주어진 수치만 근거로, 이 서비스에 안정적으로 접속될 가능성을 학생이 감으로 알 수 있게 한국어 2~3문장으로 정리하라.
 
 규칙:
-- 수치에 없는 사실(원인, 서버 내부 상태, 앞으로의 예측 확률 등)을 지어내지 마라.
-- "지금 상태 → 최근 안정성 → 실용적 조언" 순서로. 조언은 상태에 맞게: 정상이면 "바로 접속해도 됩니다" 류, 느리면 "로그인·수강신청 등 시간 민감한 작업은 여유를 두세요" 류, 장애면 "잠시 후 다시 시도하세요" 류.
-- 관측 기간이 짧으면(observedDays가 작으면) "관측 N일째"임을 밝히고 단정하지 마라.
-- 퍼센트 수치는 소수점 없이. 딱딱한 통계 나열이 아니라 사람이 읽는 문장으로.
-- JSON이나 마크다운 없이 문장만 출력.`
+- 순서: (1) 안정적 접속 확률 → (2) 최근 접속 오류 이력 → (3) 현재 상태.
+- (1)은 주어진 "최근 30일 정상 접속 비율" 수치를 그대로 확률처럼 제시하라 (예: "관측 기록상 약 99.7% 확률로 안정적으로 접속됩니다"). 이 수치가 없으면(관측 부족) 확률을 지어내지 말고 "아직 관측 기간이 짧아 수치로 말하기 이르다"고 밝혀라.
+- 수치에 없는 원인·서버 내부 상태·미래 예측을 지어내지 마라.
+- "접속하세요 / 다시 시도하세요" 같은 조언·명령조는 넣지 마라. 상태를 알려주는 담담한 톤.
+- 불안정하거나 느릴 때 영향받는 작업을 언급한다면, 반드시 주어진 "이 서비스 용도"에 맞춰라 (예: 이캠퍼스면 과제 제출, 샘물이면 성적 조회). 용도와 무관한 예시(수강신청 등)를 임의로 붙이지 마라.
+- 딱딱한 통계 나열이 아니라 사람이 읽는 문장. JSON·마크다운 없이 문장만 출력.`
 
 // Summarize returns the natural-language stability blurb, or ErrDisabled if
 // no key. One short chat call.
@@ -211,6 +213,9 @@ func Summarize(ctx context.Context, in SummaryInput) (string, error) {
 func buildSummaryPrompt(in SummaryInput) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "- 서비스: %s\n", in.SiteName)
+	if in.Purpose != "" {
+		fmt.Fprintf(&b, "- 이 서비스 용도: %s\n", in.Purpose)
+	}
 	fmt.Fprintf(&b, "- 안정성 등급(내부 판정): %s\n", in.Level)
 	fmt.Fprintf(&b, "- 관측 기간: %d일\n", in.ObservedDays)
 	fmt.Fprintf(&b, "- 현재 상태: %s", currentStatusKo(in.CurrentStatus))

@@ -325,6 +325,7 @@ func (s *Service) RefreshSummary(ctx context.Context, serviceKey, siteKey string
 		}
 		blurb, err := incidentai.Summarize(ctx, incidentai.SummaryInput{
 			SiteName:            services.DisplayName(siteKey),
+			Purpose:             services.Purpose(siteKey),
 			Level:               sc.Level,
 			ObservedDays:        sc.ObservedDays,
 			Incidents7d:         sc.Incidents7d,

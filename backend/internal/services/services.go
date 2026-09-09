@@ -11,18 +11,19 @@ type Service struct {
 	SiteKey     string // short key for routes, clicks, Discord webhooks, frontend, e.g. "ecampus"
 	URL         string // URL to probe
 	DisplayName string // Korean name shown in alerts
+	Purpose     string // what students use it for — feeds the AI stability blurb so advice matches the site
 	Monitored   bool   // tracked for transitions, alerts, and incident history
 }
 
 // All is every known service, monitored or not.
 var All = []Service{
-	{Key: "HOME", SiteKey: "home", URL: "https://www.smu.ac.kr/kor/index.do", DisplayName: "상명대학교 홈페이지", Monitored: true},
-	{Key: "NOTICE", SiteKey: "notice", URL: "https://www.smu.ac.kr/kor/life/notice.do", DisplayName: "상명대학교 공지사항", Monitored: false},
-	{Key: "SAMMUL", SiteKey: "sammul", URL: "https://smul.smu.ac.kr/", DisplayName: "상명대학교 샘물(통합정보시스템)", Monitored: true},
-	{Key: "ECAMPUS", SiteKey: "ecampus", URL: "https://ecampus.smu.ac.kr/", DisplayName: "상명대학교 이캠퍼스", Monitored: true},
-	{Key: "CLOUD", SiteKey: "cloud", URL: "https://cloud.smu.ac.kr/", DisplayName: "Office 365 (클라우드메일)", Monitored: true},
-	{Key: "DORM_SEOUL", SiteKey: "dorm-seoul", URL: "https://dormitory.smu.ac.kr/dormi/index.do", DisplayName: "학생생활관", Monitored: true},
-	{Key: "SUGANG", SiteKey: "sugang", URL: "https://sugang.smu.ac.kr", DisplayName: "상명대학교 수강신청", Monitored: true},
+	{Key: "HOME", SiteKey: "home", URL: "https://www.smu.ac.kr/kor/index.do", DisplayName: "상명대학교 홈페이지", Purpose: "학교 홈페이지·공지·학사 안내 조회", Monitored: true},
+	{Key: "NOTICE", SiteKey: "notice", URL: "https://www.smu.ac.kr/kor/life/notice.do", DisplayName: "상명대학교 공지사항", Purpose: "학교 공지사항 조회", Monitored: false},
+	{Key: "SAMMUL", SiteKey: "sammul", URL: "https://smul.smu.ac.kr/", DisplayName: "상명대학교 샘물(통합정보시스템)", Purpose: "수강신청·성적 조회·증명서 발급 등 학사행정", Monitored: true},
+	{Key: "ECAMPUS", SiteKey: "ecampus", URL: "https://ecampus.smu.ac.kr/", DisplayName: "상명대학교 이캠퍼스", Purpose: "온라인 강의 수강·강의자료 확인·과제 및 시험 제출", Monitored: true},
+	{Key: "CLOUD", SiteKey: "cloud", URL: "https://cloud.smu.ac.kr/", DisplayName: "Office 365 (클라우드메일)", Purpose: "학교 메일(Office 365) 확인·발송", Monitored: true},
+	{Key: "DORM_SEOUL", SiteKey: "dorm-seoul", URL: "https://dormitory.smu.ac.kr/dormi/index.do", DisplayName: "학생생활관", Purpose: "생활관(기숙사) 입사 신청·조회", Monitored: true},
+	{Key: "SUGANG", SiteKey: "sugang", URL: "https://sugang.smu.ac.kr", DisplayName: "상명대학교 수강신청", Purpose: "수강신청", Monitored: true},
 }
 
 // Monitored is the subset of All tracked for transitions and alerts.
@@ -52,6 +53,15 @@ func DisplayName(siteKey string) string {
 		return s.DisplayName
 	}
 	return siteKey
+}
+
+// Purpose returns the "what students use it for" phrase for a site key, or ""
+// if unknown.
+func Purpose(siteKey string) string {
+	if s, ok := BySiteKey(siteKey); ok {
+		return s.Purpose
+	}
+	return ""
 }
 
 func filter(pred func(Service) bool) []Service {
