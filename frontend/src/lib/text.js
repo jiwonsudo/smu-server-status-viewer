@@ -223,8 +223,11 @@ const text = {
             : null;
       if (up != null) {
         const pct = up * 100;
-        const pctStr = pct >= 99.95 ? '거의 100' : pct.toFixed(pct >= 99 ? 2 : 1);
-        parts.push(`관측 기록상 약 ${pctStr}% 확률로 안정적으로 접속돼요.`);
+        parts.push(
+          pct >= 99.95
+            ? '관측 기록상 거의 100% 확률로 안정적으로 접속돼요.'
+            : `관측 기록상 약 ${pct.toFixed(1)}% 확률로 안정적으로 접속돼요.`,
+        );
       } else {
         parts.push('아직 관측 기간이 짧아 안정성을 수치로 말하기는 일러요.');
       }
