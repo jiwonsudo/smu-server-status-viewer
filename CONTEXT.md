@@ -87,8 +87,10 @@
 
 기존 AI는 "장애 확정 + 90초 지속"일 때만 호출돼서, 정상/느린 서버에서는 모달에
 템플릿 한 줄("기록된 접속 오류 N건 · 대체로 M분 내 정상화")만 나왔다. 이제 모든
-상태에서 "지금 접속해도 될까요?" 요약을 보여준다. 설계 원칙(요청 경로에서 LLM
-호출 안 함)은 그대로 — 지표는 결정론적으로 계산하고 문장만 캐시한다.
+상태에서 "서버 안정성 확인" 요약을 보여준다 — 관측된 정상 접속 비율을 "약 N%
+확률로 안정적으로 접속" 형태로 제시하고, 최근 오류 이력·현재 상태를 담담한 톤으로
+정리(조언·명령조 없음). 설계 원칙(요청 경로에서 LLM 호출 안 함)은 그대로 —
+지표는 결정론적으로 계산하고 문장만 캐시한다.
 
 - **blip 필터** (`incidentstore.BlipThresholdSeconds = 60`): `Resolve`가 복구까지
   60초 미만이면 `incidents.blip = TRUE`로 마킹. `Stats`/`Recent`가 `blip = FALSE`만
@@ -100,6 +102,9 @@
   마지막 장애 경과일, level(`solid`/`mostly-stable`/`shaky`/`down`).
 - **LLM 요약문** (`incidentai.Summarize`, `gpt-4o-mini` 1콜): 스코어카드 수치를
   2~3문장으로 다듬기만. grounding 규칙 = 판정 프롬프트와 동일(수치 밖 사실 금지).
+  프롬프트에 `services.Service.Purpose`(사이트별 용도: 이캠=강의·과제, 샘물=학사행정
+  등)를 넣어, 불안정 시 영향받는 작업을 언급하더라도 그 사이트 용도에 맞추게 함
+  (예전엔 이캠에도 "수강신청 유의"가 떴음).
 - **캐시**: `service_summaries` 테이블(site_key PK, scorecard JSONB, inputs_hash,
   blurb, first_seen_at). `internal/incidents.RefreshSummary`가 스코어카드 계산 →
   `InputsHash`(거친 필드만: level·건수·가동률·경과일·복구중앙값. 응답시간/일 미만

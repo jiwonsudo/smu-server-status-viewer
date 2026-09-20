@@ -189,7 +189,7 @@ const text = {
   // 정상이면 최근 안정성, 오류 상태면 진행 중 문제의 판정.
   aiAnalysis: {
     openButtonDown: '이번 문제 분석 보기',
-    openButtonNormal: '이 서버 안정성 · 오류 이력 보기',
+    openButtonNormal: '서버 안정성 확인',
     aiBadge: 'AI',
     aiTag: 'AI 추정',
     loading: '이력을 불러오고 있어요...',
@@ -205,24 +205,34 @@ const text = {
     confidence: (pct) => `신뢰도 ${pct}%`,
     etaPrefix: '예상: ',
 
-    // 평상시 안정성 요약(모든 상태에서 표시). blurb(AI 문장)이 있으면 그걸,
+    // 서버 안정성 확인(모든 상태에서 표시). blurb(AI 문장)이 있으면 그걸,
     // 없으면 scorecardSentence(결정론적 문장)를 보여준다.
-    summaryHeading: '지금 접속해도 될까요?',
+    summaryHeading: '서버 안정성 확인',
     summaryBlurbTag: 'AI 요약',
     summaryObservedNote: (days) =>
       days <= 0 ? '모니터링을 막 시작했어요.' : `최근 모니터링 관측 ${days}일 기준이에요.`,
     scorecardSentence: (sc) => {
       const parts = [];
-      if (sc.currentStatus === 'down') parts.push('지금은 접속 오류 상태예요.');
-      else if (sc.currentStatus === 'slow')
-        parts.push(`지금 접속은 되지만 평소보다 느려요 (${sc.currentResponseMs}ms).`);
-      else if (sc.currentStatus === 'ok') parts.push('지금은 정상적으로 응답하고 있어요.');
 
-      if (typeof sc.uptime30d === 'number' && sc.uptime30d >= 0) {
-        const pct = sc.uptime30d * 100;
-        const pctStr = pct >= 99.95 ? '100' : pct.toFixed(pct >= 99 ? 2 : 1);
-        parts.push(`최근 정상 접속 비율은 약 ${pctStr}%예요.`);
+      // 1) 안정적 접속 확률 (관측된 정상 접속 비율)
+      const up =
+        typeof sc.uptime30d === 'number' && sc.uptime30d >= 0
+          ? sc.uptime30d
+          : typeof sc.uptime7d === 'number' && sc.uptime7d >= 0
+            ? sc.uptime7d
+            : null;
+      if (up != null) {
+        const pct = up * 100;
+        parts.push(
+          pct >= 99.95
+            ? '관측 기록상 거의 100% 확률로 안정적으로 접속돼요.'
+            : `관측 기록상 약 ${pct.toFixed(1)}% 확률로 안정적으로 접속돼요.`,
+        );
+      } else {
+        parts.push('아직 관측 기간이 짧아 안정성을 수치로 말하기는 일러요.');
       }
+
+      // 2) 최근 접속 오류 이력
       if (!sc.incidents7d && !sc.incidents30d) {
         parts.push('관측 이후 접속 오류가 한 번도 없었어요.');
       } else if (!sc.incidents7d) {
@@ -232,13 +242,20 @@ const text = {
         parts.push(`최근 7일간 접속 오류가 ${sc.incidents7d}건 있었어요${rec}.`);
       }
 
-      const advice = {
-        solid: '안정적으로 접속될 가능성이 높아요.',
-        'mostly-stable': '대체로 무리 없이 접속되지만 가끔 짧게 튈 수 있어요.',
-        shaky: '최근 불안정하니 로그인·수강신청처럼 시간에 민감한 작업은 여유를 두세요.',
-        down: '잠시 후 다시 시도해보세요.',
+      // 3) 현재 상태 + 담담한 안정성 한줄
+      if (sc.currentStatus === 'down') parts.push('지금은 접속 오류 상태예요.');
+      else if (sc.currentStatus === 'slow')
+        parts.push(`지금 접속은 되지만 평소보다 느려요 (${sc.currentResponseMs}ms).`);
+      else if (sc.currentStatus === 'ok') parts.push('지금은 정상 응답 중이에요.');
+
+      const assess = {
+        solid: '전반적으로 안정적인 서버예요.',
+        'mostly-stable': '대체로 안정적이고, 문제가 생겨도 대부분 짧게 끝나요.',
+        shaky: '최근 들어 접속이 불안정한 편이에요.',
+        down: '',
       }[sc.level];
-      if (advice) parts.push(advice);
+      if (assess) parts.push(assess);
+
       return parts.join(' ');
     },
 
